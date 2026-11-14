@@ -105,6 +105,16 @@ WP1 (Kontextmodell, Scopes, Provenienz, Berechtigungen) ist umgesetzt:
 Nächste Reihenfolge laut Plan: WP3 (Commitment-Erkennung) vor WP2 (Attention Engine) —
 bereit, sobald freigegeben.
 
+## WP3-Status: IMPLEMENTIERT (Branch vibe/personal-os-4e2dc9)
+
+Commitment-Erkennung in `personal_os/commitments.py` (deterministisch, offline):
+mentioned/intent/committed/done/rejected inkl. fremder Anfragen (erst nach
+Bestaetigung verbindlich), Dedup, WP1-Konfliktlogik, keine Wiedereroeffnung
+erledigter, Provenienz + Konfidenz, Scope-Uebernahme ohne Hochstufung,
+Capture-Hook + CLI/REST/MCP. 15 neue Tests; 98 gesamt OK; pre-commit clean.
+
+Naechster Schritt: WP2 (Attention Engine) — wartet auf Freigabe.
+
 ## 3. Priorisierter Implementierungsplan (Arbeitspakete)
 
 Jedes WP ist einzeln testbar und merged-faehig. Reihenfolge nach Nutzen/Aufwand.

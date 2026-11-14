@@ -108,6 +108,21 @@ def build_parser() -> argparse.ArgumentParser:
     c = sub.add_parser("sync", help="Alle Connectors synchronisieren")
     c.add_argument("--connector", default=None)
 
+    c = sub.add_parser("commitments", help="WP3: Verpflichtungen erkennen/verwalten")
+    csub = c.add_subparsers(dest="commitments_command", required=True)
+    cl = csub.add_parser("list", help="Commitments listen")
+    cl.add_argument("--scope", default=None, choices=["private", "work"])
+    cl.add_argument("--status", default=None)
+    cs = csub.add_parser("scan", help="Text auf Commitments scannen")
+    cs.add_argument("text")
+    cs.add_argument("--scope", default="private", choices=["private", "work"])
+    cs.add_argument("--source", default="cli")
+    cf = csub.add_parser("confirm", help="Anfrage/Absicht als verbindlich bestaetigen")
+    cf.add_argument("id")
+    cd = csub.add_parser("close", help="Commitment abschliessen (done/rejected)")
+    cd.add_argument("id")
+    cd.add_argument("--status", default="done", choices=["done", "rejected"])
+
     sub.add_parser("status", help="Uebersicht ueber das OS")
 
     c = sub.add_parser("serve", help="lokalen API-Server starten (nur 127.0.0.1)")
@@ -249,6 +264,37 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"{d['id']}  [{d['status']}] {d['agent']}: {instr}")
     elif args.command == "sync":
         _print_json(core.sync(connector=args.connector))
+    elif args.command == "commitments":
+        if args.commitments_command == "list":
+            objs = core.commitments.list(scope=args.scope, status=args.status)
+            for o in objs:
+                due = (o.get("meta") or {}).get("due") or "-"
+                resp = (o.get("meta") or {}).get("responsible") or "-"
+                print(
+                    f"{o['id']}  [{o['scope']}/{o['status']}] bis {due}  "
+                    f"({resp}) {o['title']}"
+                )
+            if not objs:
+                print("Keine Commitments.")
+        elif args.commitments_command == "scan":
+            found = core.commitments.scan_text(
+                args.text, source=args.source, scope=args.scope
+            )
+            if not found:
+                print("Kein Commitment erkannt.")
+            for f in found:
+                o = f["object"]
+                dup = " (Duplikat)" if f.get("duplicate") else ""
+                print(
+                    f"erkannt{dup}: {o['id']} [{o['status']}] Konfidenz "
+                    f"{o['confidence']} – {o['title']}"
+                )
+        elif args.commitments_command == "confirm":
+            o = core.commitments.confirm(args.id)
+            print(f"{o['id']}: {o['status']}")
+        elif args.commitments_command == "close":
+            o = core.commitments.close(args.id, status=args.status)
+            print(f"{o['id']}: {o['status']}")
     elif args.command == "status":
         _print_json(core.stats())
     elif args.command == "serve":

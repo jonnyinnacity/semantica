@@ -139,3 +139,22 @@ Ab Version 0.2.0 (Mini-OS WP1):
 - **Delegation**: Delegationen haben einen Scope; externe LLM-Calls werden nur ausgefuehrt,
   wenn der Scope dafuer freigegeben ist, sonst Fallback auf den deterministischen Offline-Agenten
   mit Hinweis im Ergebnis.
+
+## WP3: Commitment-Erkennung (`commitments.py`)
+
+Deterministischer, offline arbeitender Detector auf dem WP1-Kontextmodell.
+
+- **Unterscheidung:** Erwähnung (`mentioned`, Konfidenz 0.4) vs. Absicht (`intent`, 0.6)
+  vs. eigene verbindliche Zusage (`committed`, 0.9) vs. fremde Anfrage (`request_to_me`
+  → `mentioned`, 0.75, erst nach `confirm` → `committed`) vs. Erledigung (`done`) /
+  Absage (`rejected`). Unklare Fälle werden nie stillschweigend verbindlich.
+- **Extraktion:** Frist via `parse_due`, Person via `@mention`/Präposition,
+  Scope 1:1 vom Quell-Item (keine automatische Hochstufung private→work).
+- **Dedup & Konflikte:** identische Verpflichtung (Titel+Scope+Frist) → Duplikat;
+  abweichende Frist → WP1-Konfliktlogik (`conflicts_with`); erledigte/verorfene
+  werden durch erneute Erwähnung **nicht** wieder geöffnet.
+- **Provenienz:** `source`, `source_item_id`, `created_by`, Konfidenz, Status-History.
+- **Integration:** Capture-Hook in `inbox.capture` (fehlergesichert, nicht-destruktiv);
+  CLI `pos commitments list|scan|confirm|close`; REST `/commitments`,
+  `/commitments/scan`, `/commitments/{id}/transition` (externe Subjekte nur `work`,
+  Schreiben geprüft); MCP `pos_commitments_list|scan|transition`.

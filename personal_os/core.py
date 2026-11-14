@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from . import inbox as inbox_mod
+from .commitments import CommitmentManager
 from .config import OSConfig
 from .context_model import ContextModel
 from .delegate import DelegationManager
@@ -32,6 +33,7 @@ class PersonalOS:
         self.delegations = DelegationManager(self.store, self)
         self.context = ContextModel(self.store)
         self.permissions = PermissionManager(self.store, self.config)
+        self.commitments = CommitmentManager(self.store)
 
     def close(self) -> None:
         self.store.close()

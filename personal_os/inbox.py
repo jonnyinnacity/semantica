@@ -75,6 +75,12 @@ def capture(
     core.memory.add(item)
     result = item.to_dict()
     result["duplicate"] = False
+    detector = getattr(core, "commitments", None)
+    if detector is not None:
+        try:
+            result["commitments"] = detector.scan_item(result)
+        except Exception:  # noqa: BLE001 - WP3-Detektion darf Capture nie brechen
+            result["commitments"] = []
     return result
 
 

@@ -158,6 +158,42 @@ TOOLS = [
             "required": ["data"],
         },
     },
+    {
+        "name": "pos_commitments_list",
+        "description": "WP3: Commitments listen (filter: scope/status).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "scope": {"type": "string", "enum": ["private", "work"]},
+                "status": {"type": "string"},
+            },
+        },
+    },
+    {
+        "name": "pos_commitments_scan",
+        "description": "WP3: Text auf Commitments scannen (Anfrage/Absicht/Zusage).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string"},
+                "scope": {"type": "string", "enum": ["private", "work"]},
+                "source": {"type": "string"},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "pos_commitments_transition",
+        "description": "WP3: Commitments listen (filter: scope/status).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "object_id": {"type": "string"},
+                "status": {"type": "string"},
+            },
+            "required": ["object_id", "status"],
+        },
+    },
 ]
 
 
@@ -279,6 +315,20 @@ def _dispatch(core: PersonalOS, name: str, args: Dict[str, Any]) -> Any:
         )
     if name == "pos_redact":
         return core.redact_for_external(args.get("data", {}))
+    if name == "pos_commitments_list":
+        return core.commitments.list(
+            scope=args.get("scope") or None, status=args.get("status") or None
+        )
+    if name == "pos_commitments_scan":
+        return core.commitments.scan_text(
+            args.get("text", ""),
+            source=args.get("source", "mcp"),
+            scope=args.get("scope") or "private",
+        )
+    if name == "pos_commitments_transition":
+        return core.context.transition(
+            args.get("object_id", ""), args.get("status", "")
+        )
     raise ValueError(f"Unbekanntes Tool: {name}")
 
 

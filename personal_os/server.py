@@ -265,6 +265,58 @@ def create_app(core: PersonalOS):
             ]
         return JSONResponse(delegations)
 
+    async def commitments_list_ep(request: Request):
+        denied = await check_auth(request)
+        if denied:
+            return denied
+        requested = request.query_params.get("scope") or None
+        scope, err = resolve_read_scope(request, requested)
+        if err:
+            return err
+        objs = core.commitments.list(
+            scope=scope, status=request.query_params.get("status") or None
+        )
+        if subject(request) == "external":
+            objs = core.redact_for_external(objs)
+        return JSONResponse(objs)
+
+    async def commitments_scan_ep(request: Request):
+        denied = await check_auth(request)
+        if denied:
+            return denied
+        body = await request.json()
+        scope = body.get("scope") or core.config.privacy.default_capture_scope
+        denied_write = check_write(request, scope)
+        if denied_write:
+            return denied_write
+        found = core.commitments.scan_text(
+            body.get("text", ""),
+            source=body.get("source", "api"),
+            scope=scope,
+        )
+        return JSONResponse(found)
+
+    async def commitments_transition_ep(request: Request):
+        denied = await check_auth(request)
+        if denied:
+            return denied
+        body = await request.json()
+        obj = core.commitments.get(request.path_params["obj_id"])
+        if not obj:
+            return JSONResponse({"error": "nicht gefunden"}, status_code=404)
+        denied_write = check_write(request, obj.get("scope", PRIVATE))
+        if denied_write:
+            return denied_write
+        try:
+            obj = core.context.transition(
+                request.path_params["obj_id"],
+                body.get("status", ""),
+                by=subject(request),
+            )
+        except (ValueError, KeyError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        return JSONResponse(obj)
+
     async def sync_ep(request: Request):
         denied = await check_auth(request)
         if denied:
@@ -291,6 +343,13 @@ def create_app(core: PersonalOS):
         Route("/loops/{loop_id}/done", loop_done_ep, methods=["POST"]),
         Route("/delegate", delegate_ep, methods=["POST"]),
         Route("/delegations", delegations_list_ep),
+        Route("/commitments", commitments_list_ep),
+        Route("/commitments/scan", commitments_scan_ep, methods=["POST"]),
+        Route(
+            "/commitments/{obj_id}/transition",
+            commitments_transition_ep,
+            methods=["POST"],
+        ),
         Route("/sync", sync_ep, methods=["POST"]),
         Route("/stats", stats_ep),
     ]
