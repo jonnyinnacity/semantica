@@ -18,13 +18,14 @@ PROTOCOL_VERSION = "2024-11-05"
 TOOLS = [
     {
         "name": "pos_capture",
-        "description": "Wissen ins Langzeitgedaechtnis schreiben.",
+        "description": "Wissen ins Gedaechtnis schreiben (scope: private|work).",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "content": {"type": "string"},
                 "kind": {"type": "string"},
                 "source": {"type": "string"},
+                "scope": {"type": "string", "enum": ["private", "work"]},
                 "tags": {"type": "array", "items": {"type": "string"}},
             },
             "required": ["content"],
@@ -32,10 +33,14 @@ TOOLS = [
     },
     {
         "name": "pos_ask",
-        "description": "Semantische Frage gegen das Wissensgedaechtnis.",
+        "description": "Frage ans Gedaechtnis; scope filtert strikt.",
         "inputSchema": {
             "type": "object",
-            "properties": {"query": {"type": "string"}, "limit": {"type": "integer"}},
+            "properties": {
+                "query": {"type": "string"},
+                "limit": {"type": "integer"},
+                "scope": {"type": "string", "enum": ["private", "work"]},
+            },
             "required": ["query"],
         },
     },
@@ -101,6 +106,57 @@ TOOLS = [
         "name": "pos_stats",
         "description": "Statistiken des OS.",
         "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "pos_context_list",
+        "description": "Kontext-Objekte listen (WP1), filter: type/scope/status.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "type": {"type": "string"},
+                "scope": {"type": "string", "enum": ["private", "work"]},
+                "status": {"type": "string"},
+            },
+        },
+    },
+    {
+        "name": "pos_context_add",
+        "description": "Kontext-Objekt anlegen (WP1) mit Scope und Status.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "type": {"type": "string"},
+                "title": {"type": "string"},
+                "scope": {"type": "string", "enum": ["private", "work"]},
+                "status": {"type": "string"},
+                "confidence": {"type": "number"},
+                "valid_until": {"type": "string"},
+                "source": {"type": "string"},
+                "source_item_id": {"type": "string"},
+            },
+            "required": ["type", "title"],
+        },
+    },
+    {
+        "name": "pos_context_transition",
+        "description": "Status wechseln (mentioned/intent/committed/done/rejected).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "object_id": {"type": "string"},
+                "status": {"type": "string"},
+            },
+            "required": ["object_id", "status"],
+        },
+    },
+    {
+        "name": "pos_redact",
+        "description": "Payload fuer externe Modelle redacten (private wird entfernt).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"data": {"type": "object"}},
+            "required": ["data"],
+        },
     },
 ]
 
@@ -169,9 +225,14 @@ def _dispatch(core: PersonalOS, name: str, args: Dict[str, Any]) -> Any:
             kind=args.get("kind", "note"),
             source=args.get("source", "mcp"),
             tags=args.get("tags", []),
+            scope=args.get("scope") or None,
         )
     if name == "pos_ask":
-        return core.ask(args.get("query", ""), limit=int(args.get("limit", 5)))
+        return core.ask(
+            args.get("query", ""),
+            limit=int(args.get("limit", 5)),
+            scope=args.get("scope") or None,
+        )
     if name == "pos_today":
         return core.today()
     if name == "pos_digest_text":
@@ -195,6 +256,29 @@ def _dispatch(core: PersonalOS, name: str, args: Dict[str, Any]) -> Any:
         return core.sync()
     if name == "pos_stats":
         return core.stats()
+    if name == "pos_context_list":
+        return core.context.list(
+            type_=args.get("type") or None,
+            scope=args.get("scope") or None,
+            status=args.get("status") or None,
+        )
+    if name == "pos_context_add":
+        return core.context.add_object(
+            type_=args.get("type", ""),
+            title=args.get("title", ""),
+            scope=args.get("scope") or "private",
+            status=args.get("status", "mentioned"),
+            confidence=float(args.get("confidence", 1.0)),
+            valid_until=args.get("valid_until"),
+            source=args.get("source", "mcp"),
+            source_item_id=args.get("source_item_id"),
+        )
+    if name == "pos_context_transition":
+        return core.context.transition(
+            args.get("object_id", ""), args.get("status", "")
+        )
+    if name == "pos_redact":
+        return core.redact_for_external(args.get("data", {}))
     raise ValueError(f"Unbekanntes Tool: {name}")
 
 

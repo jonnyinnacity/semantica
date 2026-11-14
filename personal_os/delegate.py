@@ -28,6 +28,7 @@ class AgentRunner:
 
     def __init__(self, core):
         self.core = core
+        self._scope: Optional[str] = None
         self.tools: Dict[str, Callable[..., Any]] = {
             "memory_ask": self._t_memory_ask,
             "memory_capture": self._t_capture,
@@ -37,16 +38,18 @@ class AgentRunner:
         }
 
     def _t_memory_ask(self, query: str, limit: int = 5) -> Dict[str, Any]:
-        return self.core.ask(query, limit=limit)
+        return self.core.ask(query, limit=limit, scope=self._scope)
 
     def _t_capture(
         self, content: str, tags: str = "", kind: str = "agent"
     ) -> Dict[str, Any]:
         tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-        return self.core.capture(content, kind=kind, source="agent", tags=tag_list)
+        return self.core.capture(
+            content, kind=kind, source="agent", tags=tag_list, scope=self._scope
+        )
 
     def _t_loop_add(self, text: str) -> Dict[str, Any]:
-        return self.core.add_loop_from_text(text)
+        return self.core.add_loop_from_text(text, scope=self._scope or "private")
 
     def _t_loops_list(self, status: str = "open") -> List[Dict[str, Any]]:
         return self.core.list_loops(status=status)
@@ -54,17 +57,28 @@ class AgentRunner:
     def _t_delegations_list(self, status: str = "") -> List[Dict[str, Any]]:
         return self.core.list_delegations(status=status or None)
 
+    def _llm_allowed(self, scope: str) -> bool:
+        """Externe Modellaufrufe nur, wenn der Scope dafuer freigegeben ist (WP1)."""
+        return self.core.permissions.can_external_model_call(scope)
+
     def run(self, delegation: Dict[str, Any]) -> Dict[str, Any]:
         """Delegation ausfuehren; Ergebnis und Trace in der DB ablegen."""
         core = self.core
         did = delegation["id"]
+        self._scope = (delegation.get("meta") or {}).get("scope", "private")
         core.store.update_delegation(did, {"status": "running", "updated_at": utcnow()})
         trace: List[Dict[str, Any]] = []
         try:
-            if core.config.llm.provider not in ("", "none"):
+            llm_configured = core.config.llm.provider not in ("", "none")
+            if llm_configured and self._llm_allowed(self._scope):
                 result = self._llm_agent(delegation["instruction"], trace)
             else:
                 result = self._rule_agent(delegation["instruction"], trace)
+                if llm_configured:
+                    result += (
+                        "\n[Hinweis] Externes Modell nicht genutzt: Scope "
+                        f"'{self._scope}' ist nicht fuer externe Aufrufe freigegeben."
+                    )
             core.store.update_delegation(
                 did,
                 {
@@ -204,7 +218,9 @@ class DelegationManager:
         self.core = core
         self.runner = AgentRunner(core)
 
-    def add(self, instruction: str, agent: str = "default") -> Dict[str, Any]:
+    def add(
+        self, instruction: str, agent: str = "default", scope: str = "private"
+    ) -> Dict[str, Any]:
         now = utcnow()
         delegation = Delegation(
             id=new_id(),
@@ -213,6 +229,7 @@ class DelegationManager:
             status="pending",
             created_at=now,
             updated_at=now,
+            meta={"scope": scope},
         )
         self.store.add_delegation(delegation.to_dict())
         return delegation.to_dict()

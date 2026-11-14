@@ -70,13 +70,21 @@ class KnowledgeMemory:
         return item
 
     def search(
-        self, query: str, limit: int = 5, kind: Optional[str] = None
+        self,
+        query: str,
+        limit: int = 5,
+        kind: Optional[str] = None,
+        scope: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Hybride Suche: 0.7 * Cosine + 0.3 * Keyword."""
+        """Hybride Suche: 0.7 * Cosine + 0.3 * Keyword.
+
+        ``scope`` filtert strikt: bei ``scope='work'`` werden private Eintraege
+        niemals zurueckgegeben; ``scope=None`` ist die lokale Owner-Ansicht (alle).
+        """
         q_emb = self.embed(query)
         q_tokens = tokenize(query)
         results = []
-        for row in self.store.list_items(kind=kind):
+        for row in self.store.list_items(kind=kind, scope=scope):
             score = 0.7 * self._cosine(
                 q_emb, row.get("embedding") or []
             ) + 0.3 * self._keyword_score(q_tokens, row.get("content", ""))
@@ -84,9 +92,11 @@ class KnowledgeMemory:
         results.sort(key=lambda r: r["score"], reverse=True)
         return results[:limit]
 
-    def ask(self, query: str, limit: int = 5) -> Dict[str, Any]:
+    def ask(
+        self, query: str, limit: int = 5, scope: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Frage gegen das Gedaechtnis; liefert Treffer + verknuepfte Entitaeten."""
-        results = self.search(query, limit=limit)
+        results = self.search(query, limit=limit, scope=scope)
         related: List[Dict[str, Any]] = []
         for r in results:
             related.extend(self.related_entities(r.get("id")))

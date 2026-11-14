@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from .extract import next_due, parse_loop
 from .models import Loop, new_id, utcnow
+from .scopes import validate_scope
 
 
 class LoopsManager:
@@ -29,12 +30,14 @@ class LoopsManager:
         next_action: str = "",
         tags: Optional[List[str]] = None,
         meta: Optional[Dict[str, Any]] = None,
+        scope: str = "private",
     ) -> Dict[str, Any]:
         now = utcnow()
         loop = Loop(
             id=new_id(),
             title=title,
             status="open",
+            scope=validate_scope(scope),
             priority=priority,
             due=due,
             repeat=repeat,
@@ -48,10 +51,10 @@ class LoopsManager:
         return loop.to_dict()
 
     def add_from_text(
-        self, text: str, now: Optional[datetime] = None
+        self, text: str, now: Optional[datetime] = None, scope: str = "private"
     ) -> Dict[str, Any]:
         parsed = parse_loop(text, now)
-        return self.add(**parsed)
+        return self.add(**parsed, scope=scope)
 
     def get(self, id_: str) -> Optional[Dict[str, Any]]:
         return self.store.get_loop(id_)
@@ -60,9 +63,10 @@ class LoopsManager:
         self,
         status: str = "open",
         include_snoozed_until: Optional[str] = None,
+        scope: Optional[str] = None,
         limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
-        loops = self.store.list_loops(status=status, limit=limit)
+        loops = self.store.list_loops(status=status, scope=scope, limit=limit)
         if status == "open" and include_snoozed_until:
             loops = [
                 lp

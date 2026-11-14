@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .models import MemoryItem, new_id, utcnow
+from .scopes import validate_scope
 
 TEXT_EXTENSIONS = {
     ".txt",
@@ -46,11 +47,16 @@ def capture(
     source: str = "",
     tags: Optional[List[str]] = None,
     meta: Optional[Dict[str, Any]] = None,
+    scope: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Text ins Langzeitgedaechtnis schreiben (Duplikate werden erkannt)."""
+    """Text ins Langzeitgedaechtnis schreiben (Duplikate werden erkannt).
+
+    ``scope`` trennt private von beruflichen Daten (Default: private, sicher).
+    """
     content = (content or "").strip()
     if not content:
         raise ValueError("Leerer Inhalt kann nicht erfasst werden.")
+    scope = validate_scope(scope, default=core.config.privacy.default_capture_scope)
     digest = content_hash(content)
     existing = core.store.find_item_by_hash(digest)
     if existing:
@@ -60,6 +66,7 @@ def capture(
         kind=kind,
         content=content,
         source=source,
+        scope=scope,
         tags=tags or [],
         hash=digest,
         created_at=utcnow(),
@@ -71,7 +78,7 @@ def capture(
     return result
 
 
-def capture_file(core, path: str) -> Dict[str, Any]:
+def capture_file(core, path: str, scope: Optional[str] = None) -> Dict[str, Any]:
     """Datei ins Gedaechtnis laden (Text-Formate direkt, Rest via Semantica)."""
     p = Path(path).expanduser()
     if not p.exists():
@@ -80,7 +87,9 @@ def capture_file(core, path: str) -> Dict[str, Any]:
         text = p.read_text(encoding="utf-8", errors="replace")
     else:
         text = _extract_via_semantica(str(p))
-    return capture(core, text, kind="file", source=str(p), meta={"filename": p.name})
+    return capture(
+        core, text, kind="file", source=str(p), meta={"filename": p.name}, scope=scope
+    )
 
 
 def _extract_via_semantica(path: str) -> str:
@@ -96,11 +105,16 @@ def _extract_via_semantica(path: str) -> str:
         ) from exc
 
 
-def capture_url(core, url: str) -> Dict[str, Any]:
+def capture_url(core, url: str, scope: Optional[str] = None) -> Dict[str, Any]:
     """Webseite ins Gedaechtnis laden ( siehe connectors.web )."""
     from .connectors.web import fetch_text
 
     text, title = fetch_text(url)
     return capture(
-        core, text, kind="web", source=url, meta={"title": title, "url": url}
+        core,
+        text,
+        kind="web",
+        source=url,
+        meta={"title": title, "url": url},
+        scope=scope,
     )

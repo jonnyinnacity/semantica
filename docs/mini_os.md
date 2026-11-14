@@ -87,6 +87,24 @@ Interaktions-Schnittstellen bleiben: CLI (`pos`), REST (127.0.0.1), MCP (stdio).
 
 ---
 
+## WP1-Status: IMPLEMENTIERT (Branch vibe/personal-os-4e2dc9)
+
+WP1 (Kontextmodell, Scopes, Provenienz, Berechtigungen) ist umgesetzt:
+
+- Additive Migration in `store.py` (`scope`-Spalten, Tabellen `context_objects`,
+  `object_links`, `permissions`); Alt-Daten getestet erhalten.
+- `context_model.py`: Objekttypen, Status-Lebenszyklus mit History, Provenienz,
+  Widerspruchserkennung (`conflicts_with` + `resolve_conflict`, kein Ueberschreiben).
+- `scopes.py`: `private`/`work`; Scope-Filter in Memory/Store/Loops/REST/MCP;
+  `redact_for_external` fuer externe Modellaufrufe.
+- `permissions.py`: Subjekte owner/agent/external; Default deny fuer external auf private;
+  Config-Flag `privacy.external_can_see_private`; REST mit POS_TOKEN = external (nur work).
+- Delegation mit Scope; externe LLM-Calls nur bei Freigabe, sonst Offline-Fallback.
+- 19 neue Tests (`tests/test_personal_os_wp1.py`), alle 65 Tests OK, pre-commit clean.
+
+Nächste Reihenfolge laut Plan: WP3 (Commitment-Erkennung) vor WP2 (Attention Engine) —
+bereit, sobald freigegeben.
+
 ## 3. Priorisierter Implementierungsplan (Arbeitspakete)
 
 Jedes WP ist einzeln testbar und merged-faehig. Reihenfolge nach Nutzen/Aufwand.

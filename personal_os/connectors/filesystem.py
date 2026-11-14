@@ -26,7 +26,11 @@ class FilesystemConnector(Connector):
                 continue
             text = p.read_text(encoding="utf-8", errors="replace")
             item = self.core.capture(
-                text, kind="file", source=str(p), meta={"filename": p.name}
+                text,
+                kind="file",
+                source=str(p),
+                meta={"filename": p.name},
+                scope=self.config.get("scope", "private"),
             )
             if not item.get("duplicate"):
                 captured += 1
@@ -80,7 +84,11 @@ class GitConnector(Connector):
                 f"Commit {sha[:8]} von {author} ({date_}): {subject}\n{body}".strip()
             )
             item = self.core.capture(
-                content, kind="commit", source=f"git:{path}", tags=["git"]
+                content,
+                kind="commit",
+                source=f"git:{path}",
+                tags=["git"],
+                scope=self.config.get("scope", "work"),
             )
             if not item.get("duplicate"):
                 captured += 1

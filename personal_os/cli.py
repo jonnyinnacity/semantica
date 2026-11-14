@@ -36,16 +36,43 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--kind", default="note")
     c.add_argument("--source", default="cli")
     c.add_argument("--tags", default="", help="kommagetrennt")
+    c.add_argument("--scope", default=None, choices=["private", "work"])
 
     c = sub.add_parser("file", help="Datei ins Wissensgedaechtnis laden")
     c.add_argument("path")
+    c.add_argument("--scope", default=None, choices=["private", "work"])
 
     c = sub.add_parser("url", help="Webseite ins Wissensgedaechtnis laden")
     c.add_argument("url")
+    c.add_argument("--scope", default=None, choices=["private", "work"])
 
     c = sub.add_parser("ask", help="Frage gegen das Wissensgedaechtnis")
     c.add_argument("query")
     c.add_argument("--limit", type=int, default=5)
+    c.add_argument(
+        "--scope",
+        default=None,
+        choices=["private", "work"],
+        help="nur dieser Scope (work sieht niemals private Daten)",
+    )
+
+    c = sub.add_parser("context", help="Kontext-Objekte verwalten (WP1)")
+    ctx_sub = c.add_subparsers(dest="context_command", required=True)
+    a = ctx_sub.add_parser("add", help="Objekt anlegen")
+    a.add_argument(
+        "type", help="person|area|project|task|commitment|decision|routine|goal|event"
+    )
+    a.add_argument("title")
+    a.add_argument("--scope", default="private", choices=["private", "work"])
+    a.add_argument("--status", default="mentioned")
+    a.add_argument("--source", default="cli")
+    ll = ctx_sub.add_parser("list", help="Objekte listen")
+    ll.add_argument("--type", default=None)
+    ll.add_argument("--scope", default=None, choices=["private", "work"])
+    ll.add_argument("--status", default=None)
+    t = ctx_sub.add_parser("transition", help="Status wechseln")
+    t.add_argument("id")
+    t.add_argument("status")
 
     sub.add_parser("today", help="Tages-Digest anzeigen")
     sub.add_parser("digest", help="Tages-Digest als Text")
@@ -102,28 +129,31 @@ def main(argv: Optional[List[str]] = None) -> int:
         print("Config: config.json | Speicher: store.db | KG: kg.json")
     elif args.command == "capture":
         tags = [t.strip() for t in args.tags.split(",") if t.strip()]
-        item = core.capture(args.text, kind=args.kind, source=args.source, tags=tags)
+        item = core.capture(
+            args.text, kind=args.kind, source=args.source, tags=tags, scope=args.scope
+        )
+        scope = item.get("scope", "private")
         print(
             "Duplikat – bereits gespeichert."
             if item.get("duplicate")
-            else f"Gespeichert als {item['id']} ({item['kind']})."
+            else f"Gespeichert als {item['id']} ({item['kind']}, scope={scope})."
         )
     elif args.command == "file":
-        item = core.capture_file(args.path)
+        item = core.capture_file(args.path, scope=args.scope)
         print(
             "Duplikat – bereits gespeichert."
             if item.get("duplicate")
-            else f"Datei gespeichert als {item['id']}."
+            else f"Datei gespeichert als {item['id']} (scope={item.get('scope')})."
         )
     elif args.command == "url":
-        item = core.capture_url(args.url)
+        item = core.capture_url(args.url, scope=args.scope)
         print(
             "Duplikat – bereits gespeichert."
             if item.get("duplicate")
-            else f"URL gespeichert als {item['id']}."
+            else f"URL gespeichert als {item['id']} (scope={item.get('scope')})."
         )
     elif args.command == "ask":
-        result = core.ask(args.query, limit=args.limit)
+        result = core.ask(args.query, limit=args.limit, scope=args.scope)
         if not result["results"]:
             print("Keine Treffer.")
         for r in result["results"]:
@@ -134,6 +164,37 @@ def main(argv: Optional[List[str]] = None) -> int:
         if result["related_entities"]:
             ents = ", ".join(str(e.get("id")) for e in result["related_entities"][:8])
             print(f"Verknuepfte Entitaeten: {ents}")
+    elif args.command == "context":
+        if args.context_command == "add":
+            obj = core.context.add_object(
+                type_=args.type,
+                title=args.title,
+                scope=args.scope,
+                status=args.status,
+                source=args.source,
+            )
+            note = (
+                f" (Konflikt mit {obj['conflict_with']})"
+                if obj.get("conflict_with")
+                else ""
+            )
+            print(
+                f"Objekt angelegt: {obj['id']} "
+                f"[{obj['type']}/{obj['scope']}/{obj['status']}]{note}"
+            )
+        elif args.context_command == "list":
+            objs = core.context.list(
+                type_=args.type, scope=args.scope, status=args.status
+            )
+            for o in objs:
+                print(
+                    f"{o['id']}  [{o['type']}/{o['scope']}/{o['status']}] {o['title']}"
+                )
+            if not objs:
+                print("Keine Objekte.")
+        elif args.context_command == "transition":
+            obj = core.context.transition(args.id, args.status)
+            print(f"{obj['id']}: {obj['status']}")
     elif args.command == "today":
         _print_json(core.today())
     elif args.command == "digest":

@@ -57,10 +57,52 @@ CREATE TABLE IF NOT EXISTS kv (
 );
 """
 
+_WP1_SCHEMA = """
+CREATE TABLE IF NOT EXISTS context_objects (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    scope TEXT NOT NULL DEFAULT 'private',
+    status TEXT NOT NULL DEFAULT 'mentioned',
+    confidence REAL DEFAULT 1.0,
+    valid_from TEXT,
+    valid_until TEXT,
+    source TEXT DEFAULT '',
+    source_item_id TEXT,
+    created_by TEXT DEFAULT 'owner',
+    superseded_by TEXT,
+    history TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT '',
+    updated_at TEXT DEFAULT '',
+    meta TEXT DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS object_links (
+    id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    relation TEXT NOT NULL,
+    provenance TEXT DEFAULT '',
+    created_at TEXT DEFAULT '',
+    meta TEXT DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS permissions (
+    subject TEXT NOT NULL,
+    action TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    effect TEXT NOT NULL DEFAULT 'allow',
+    created_at TEXT DEFAULT '',
+    meta TEXT DEFAULT '{}',
+    PRIMARY KEY (subject, action, scope)
+);
+"""
+
 _JSON_COLS = {
     "items": ["tags", "entities", "triplets", "embedding", "meta"],
     "loops": ["tags", "meta"],
     "delegations": ["trace", "meta"],
+    "context_objects": ["history", "meta"],
+    "object_links": ["meta"],
+    "permissions": ["meta"],
 }
 
 
@@ -73,7 +115,19 @@ class SQLiteStore:
         self.conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(_SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """Additive Migration (WP1): Scope-Spalten + neue Tabellen, Daten bleiben."""
+        for table in ("items", "loops"):
+            cols = {r["name"] for r in self.conn.execute(f"PRAGMA table_info({table})")}
+            if "scope" not in cols:
+                self.conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN scope TEXT NOT NULL "
+                    "DEFAULT 'private'"
+                )
+        self.conn.executescript(_WP1_SCHEMA)
 
     def close(self) -> None:
         self.conn.close()
@@ -148,6 +202,7 @@ class SQLiteStore:
         self,
         kind: Optional[str] = None,
         since: Optional[str] = None,
+        scope: Optional[str] = None,
         limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         where, params = [], []
@@ -157,6 +212,9 @@ class SQLiteStore:
         if since:
             where.append("created_at >= ?")
             params.append(since)
+        if scope is not None:
+            where.append("scope = ?")
+            params.append(scope)
         return self._list("items", " AND ".join(where), tuple(params), limit=limit)
 
     def count_items(self, since: Optional[str] = None) -> int:
@@ -177,16 +235,24 @@ class SQLiteStore:
         self._update("loops", id_, fields)
 
     def list_loops(
-        self, status: Optional[str] = None, limit: Optional[int] = None
+        self,
+        status: Optional[str] = None,
+        scope: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
-        where, params = "", ()
+        where, params = [], []
         if status:
-            if status == "open":
-                where, params = "status = ?", ("open",)
-            else:
-                where, params = "status = ?", (status,)
+            where.append("status = ?")
+            params.append("open" if status == "open" else status)
+        if scope is not None:
+            where.append("scope = ?")
+            params.append(scope)
         return self._list(
-            "loops", where, params, order="priority DESC, due ASC", limit=limit
+            "loops",
+            " AND ".join(where),
+            tuple(params),
+            order="priority DESC, due ASC",
+            limit=limit,
         )
 
     def add_delegation(self, delegation: Dict[str, Any]) -> None:
@@ -205,6 +271,66 @@ class SQLiteStore:
         if status:
             where, params = "status = ?", (status,)
         return self._list("delegations", where, params, limit=limit)
+
+    def add_context_object(self, obj: Dict[str, Any]) -> None:
+        self._insert("context_objects", obj)
+
+    def get_context_object(self, id_: str) -> Optional[Dict[str, Any]]:
+        return self._get("context_objects", id_)
+
+    def update_context_object(self, id_: str, fields: Dict[str, Any]) -> None:
+        self._update("context_objects", id_, fields)
+
+    def list_context_objects(
+        self,
+        type_: Optional[str] = None,
+        scope: Optional[str] = None,
+        status: Optional[str] = None,
+        include_superseded: bool = False,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        where, params = [], []
+        if type_:
+            where.append("type = ?")
+            params.append(type_)
+        if scope is not None:
+            where.append("scope = ?")
+            params.append(scope)
+        if status:
+            where.append("status = ?")
+            params.append(status)
+        if not include_superseded:
+            where.append("superseded_by IS NULL")
+        return self._list(
+            "context_objects", " AND ".join(where), tuple(params), limit=limit
+        )
+
+    def add_object_link(self, link: Dict[str, Any]) -> None:
+        self._insert("object_links", link)
+
+    def list_links(self, object_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        if object_id:
+            return self._list(
+                "object_links",
+                "source_id = ? OR target_id = ?",
+                (object_id, object_id),
+            )
+        return self._list("object_links")
+
+    def add_permission(self, perm: Dict[str, Any]) -> None:
+        self._insert("permissions", perm)
+
+    def list_permissions(self, subject: Optional[str] = None) -> List[Dict[str, Any]]:
+        if subject:
+            return self._list("permissions", "subject = ?", (subject,))
+        return self._list("permissions")
+
+    def delete_permission(self, subject: str, action: str, scope: str) -> None:
+        self.conn.execute(
+            "DELETE FROM permissions WHERE subject = ? AND action = ? AND scope = ?",
+            (subject, action, scope),
+        )
+        self.conn.commit()
 
     def kv_get(self, key: str, default: Optional[str] = None) -> Optional[str]:
         row = self.conn.execute("SELECT value FROM kv WHERE key = ?", (key,)).fetchone()

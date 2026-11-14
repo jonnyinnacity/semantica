@@ -51,6 +51,14 @@ class LLMConfig:
 
 
 @dataclass
+class PrivacyConfig:
+    """Datenschutz-Voreinstellungen (WP1): Scopes und externe Modellzugriffe."""
+
+    external_can_see_private: bool = False
+    default_capture_scope: str = "private"
+
+
+@dataclass
 class OSConfig:
     """Gesamtkonfiguration des Personal OS."""
 
@@ -60,6 +68,7 @@ class OSConfig:
     adhd: ADHDConfig = field(default_factory=ADHDConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
+    privacy: PrivacyConfig = field(default_factory=PrivacyConfig)
     memory_dim: int = 256
     connectors: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
@@ -105,6 +114,9 @@ class OSConfig:
                 **_merge(asdict(ServerConfig()), raw.get("server", {}))
             ),
             llm=LLMConfig(**_merge(asdict(LLMConfig()), raw.get("llm", {}))),
+            privacy=PrivacyConfig(
+                **_merge(asdict(PrivacyConfig()), raw.get("privacy", {}))
+            ),
             memory_dim=int(raw.get("memory_dim", 256)),
             connectors=raw.get("connectors", {}) or {},
         )

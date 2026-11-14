@@ -92,7 +92,11 @@ class WebConnector(Connector):
                 continue
             content = f"{title}\n\n{text}" if title else text
             item = self.core.capture(
-                content, kind="web", source=url, meta={"title": title}
+                content,
+                kind="web",
+                source=url,
+                meta={"title": title},
+                scope=self.config.get("scope", "private"),
             )
             if not item.get("duplicate"):
                 captured += 1
@@ -112,6 +116,7 @@ class WebConnector(Connector):
                     kind="rss",
                     source=entry["link"] or feed,
                     meta={"feed": feed},
+                    scope=self.config.get("scope", "private"),
                 )
                 if not item.get("duplicate"):
                     captured += 1

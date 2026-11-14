@@ -11,10 +11,13 @@ from typing import Any, Dict, List, Optional
 
 from . import inbox as inbox_mod
 from .config import OSConfig
+from .context_model import ContextModel
 from .delegate import DelegationManager
 from .digest import build_digest, build_weekly, render_digest, render_weekly
 from .loops import LoopsManager
 from .memory import KnowledgeMemory
+from .permissions import PermissionManager
+from .scopes import redact_for_external
 from .store import SQLiteStore
 
 
@@ -27,6 +30,8 @@ class PersonalOS:
         self.memory = KnowledgeMemory(self.store, self.config)
         self.loops = LoopsManager(self.store, self.config)
         self.delegations = DelegationManager(self.store, self)
+        self.context = ContextModel(self.store)
+        self.permissions = PermissionManager(self.store, self.config)
 
     def close(self) -> None:
         self.store.close()
@@ -44,19 +49,31 @@ class PersonalOS:
         source: str = "",
         tags: Optional[List[str]] = None,
         meta: Optional[Dict[str, Any]] = None,
+        scope: Optional[str] = None,
     ) -> Dict[str, Any]:
         return inbox_mod.capture(
-            self, content, kind=kind, source=source, tags=tags, meta=meta
+            self, content, kind=kind, source=source, tags=tags, meta=meta, scope=scope
         )
 
-    def capture_file(self, path: str) -> Dict[str, Any]:
-        return inbox_mod.capture_file(self, path)
+    def capture_file(self, path: str, scope: Optional[str] = None) -> Dict[str, Any]:
+        return inbox_mod.capture_file(self, path, scope=scope)
 
-    def capture_url(self, url: str) -> Dict[str, Any]:
-        return inbox_mod.capture_url(self, url)
+    def capture_url(self, url: str, scope: Optional[str] = None) -> Dict[str, Any]:
+        return inbox_mod.capture_url(self, url, scope=scope)
 
-    def ask(self, query: str, limit: int = 5) -> Dict[str, Any]:
-        return self.memory.ask(query, limit=limit)
+    def ask(
+        self, query: str, limit: int = 5, scope: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Suche mit optionalem Scope; scope='work' sieht niemals private Daten."""
+        return self.memory.ask(query, limit=limit, scope=scope)
+
+    def redact_for_external(
+        self, data: Any, allow_private: Optional[bool] = None
+    ) -> Any:
+        """Payload fuer externe Modellaufrufe redacten (private default: entfernt)."""
+        if allow_private is None:
+            allow_private = self.config.privacy.external_can_see_private
+        return redact_for_external(data, allow_private=allow_private)
 
     def add_loop(
         self,
@@ -66,6 +83,7 @@ class PersonalOS:
         priority: int = 1,
         next_action: str = "",
         tags: Optional[List[str]] = None,
+        scope: str = "private",
     ) -> Dict[str, Any]:
         return self.loops.add(
             title=title,
@@ -74,13 +92,16 @@ class PersonalOS:
             priority=priority,
             next_action=next_action,
             tags=tags,
+            scope=scope,
         )
 
-    def add_loop_from_text(self, text: str) -> Dict[str, Any]:
-        return self.loops.add_from_text(text)
+    def add_loop_from_text(self, text: str, scope: str = "private") -> Dict[str, Any]:
+        return self.loops.add_from_text(text, scope=scope)
 
-    def list_loops(self, status: str = "open") -> List[Dict[str, Any]]:
-        return self.loops.list(status=status)
+    def list_loops(
+        self, status: str = "open", scope: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        return self.loops.list(status=status, scope=scope)
 
     def complete_loop(self, id_: str) -> Optional[Dict[str, Any]]:
         return self.loops.complete(id_)
@@ -88,8 +109,10 @@ class PersonalOS:
     def snooze_loop(self, id_: str, days: int = 1) -> Optional[Dict[str, Any]]:
         return self.loops.snooze(id_, days)
 
-    def delegate(self, instruction: str, agent: str = "default") -> Dict[str, Any]:
-        return self.delegations.add(instruction, agent=agent)
+    def delegate(
+        self, instruction: str, agent: str = "default", scope: str = "private"
+    ) -> Dict[str, Any]:
+        return self.delegations.add(instruction, agent=agent, scope=scope)
 
     def run_delegation(self, id_: str) -> Optional[Dict[str, Any]]:
         return self.delegations.run(id_)
@@ -119,6 +142,7 @@ class PersonalOS:
             "data_dir": self.config.data_dir,
             "profile": self.config.profile_name,
             "memory": self.memory.stats(),
+            "context_objects": len(self.context.list()),
             "open_loops": len(self.loops.list("open")),
             "pending_delegations": len(self.list_delegations(status="pending")),
             "connectors": sorted(self.config.connectors.keys()),

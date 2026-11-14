@@ -72,6 +72,7 @@ class EmailConnector(Connector):
                     kind="email",
                     source=f"imap://{host}/{folder}",
                     tags=["email"],
+                    scope=self.config.get("scope", "private"),
                 )
                 if not item.get("duplicate"):
                     captured += 1

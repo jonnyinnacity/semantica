@@ -74,7 +74,11 @@ class MCPClientConnector(Connector):
             return 0
         max_chars = int(self.config.get("max_chars", 8000))
         item = self.core.capture(
-            text[:max_chars], kind="mcp", source=f"mcp:{tool}", tags=["mcp", tool]
+            text[:max_chars],
+            kind="mcp",
+            source=f"mcp:{tool}",
+            tags=["mcp", tool],
+            scope=self.config.get("scope", "private"),
         )
         return 0 if item.get("duplicate") else 1
 

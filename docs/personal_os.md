@@ -112,3 +112,30 @@ python -m unittest tests.test_personal_os_core tests.test_personal_os_loops_dige
 ```
 
  siehe auch `examples/personal_os_example.py`.
+
+## WP1: Kontextmodell, Scopes, Provenienz, Berechtigungen
+
+Ab Version 0.2.0 (Mini-OS WP1):
+
+- **Scopes**: Jeder Capture und jeder Loop traegt `scope` (`private` | `work`, Default `private`).
+  `pos ask "..." --scope work` liefert **niemals** private Daten; ohne Scope sieht nur der Owner alles.
+  Gleicher Mechanismus in REST (`?scope=`) und MCP (`scope`-Argument).
+- **Kontextmodell** (`personal_os/context_model.py`): typtisierte Objekte
+  (`person|area|project|task|commitment|decision|routine|goal|event`) mit Status-Lebenszyklus
+  `mentioned → intent → committed → done` (+ `rejected`), Provenienz (`source`, `source_item_id`,
+  `created_by`), `confidence`, `valid_from/valid_until` und `history`. Widersprueche werden als
+  `conflicts_with`-Link markiert, nie stillschweigend ueberschrieben; `resolve_conflict` setzt
+  `superseded_by` (Nachweis bleibt erhalten). CLI: `pos context add|list|transition`.
+- **Berechtigungen** (`personal_os/permissions.py`): Subjekte `owner` / `agent` / `external`.
+  Default: externe Modellaufrufe nur fuer Scope `work` (und dort redacted); `private` ist fuer
+  externe Subjekte immer verweigert. Ausnahmen nur per explizitem `grant` + Config-Flag
+  `privacy.external_can_see_private`. REST-Clients mit `POS_TOKEN` gelten als `external`
+  (lesen/schreiben nur `work`, explizite private-Anfrage → 403).
+- **Redaction**: `redact_for_external()` / MCP-Tool `pos_redact` entfernen private Inhalte
+  (nur ID/Scope bleiben als Nachweis) aus jeder Payload fuer externe Modelle.
+- **Migration**: additiv und idempotent (`ALTER TABLE ... ADD COLUMN scope`, neue Tabellen
+  `context_objects`, `object_links`, `permissions`). Bestehende Datenbanken und Daten bleiben
+  vollstaendig erhalten (getestet gegen Alt-Schema).
+- **Delegation**: Delegationen haben einen Scope; externe LLM-Calls werden nur ausgefuehrt,
+  wenn der Scope dafuer freigegeben ist, sonst Fallback auf den deterministischen Offline-Agenten
+  mit Hinweis im Ergebnis.
