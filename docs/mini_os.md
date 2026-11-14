@@ -236,3 +236,48 @@ Scope-Isolation auf Store/Memory/Loops/Kontext/CLI/REST/MCP nachgewiesen,
 Migration idempotent und bestandserhaltend, Provenienz/Statushistorie/Konflikte
 nachvollziehbar. WP3 (Commitment-Erkennung) kann auf dieser Grundlage sicher
 implementiert werden (eigene Schicht `commitments.py` auf `context_model`).
+
+---
+
+## WP3-Abnahmebericht (unabhaengige Pruefung, Basis f8344cd)
+
+Pruefstand: Review-Commit siehe git log. Tests: **111 gesamt OK**
+(98 bisherige + 13 neue in `tests/test_personal_os_wp3_review.py`, inkl. frischem
+23-Satz-Korpus A5), pre-commit clean.
+
+### Befunde & Korrekturen (alle WP3-intern, mit Regressionstests)
+
+1. **Unbegruendete Verbindlichkeit bei hypothetischen Aussagen (kritisch, behoben):**
+   "Ich schicke es vielleicht nächste Woche." / "Ich glaube, ich schicke es..." /
+   "Ich nehme mir vor, ..." wurden als `committed` erkannt. Fix in `commitments.py`:
+   HYPOTHETICAL_RE stuft auf `intent` (0.5) herab; INTENT_RE vor OWN_RE;
+   "ich nehme mir vor"/"ich entscheide mich" -> intent.
+2. **Fremde Zusagen nicht erkannt (relevant, behoben):** "Anna hat zugesagt, ..."
+   -> NONE. Fix: FOREIGN_RE -> `foreign_commitment`/`committed` (party=other, person).
+3. **Explizite Versprechen nicht erkannt (relevant, behoben):** "Ich verspreche, ..."
+   (Komma nach Verb) -> NONE. Fix: optionales Komma in OWN_RE + "verspreche".
+4. **Rhetorische/negative Anfragen falsch als request (relevant, behoben):**
+   "Kannst du mir sagen, wann du kommst?" / "Kannst du das nicht machen?" -> NONE
+   (QUESTION_RE + Negations-Guard).
+5. **Mehrere Verpflichtungen in einer Nachricht (relevant, behoben):** nur die erste
+   wurde erkannt. Fix: `_segments()` zerlegt auf Satzgrenzen + "und"/"sowie".
+6. **Dubletten bei abweichenden Formulierungen (relevant, behoben):** "Ich schicke
+   dir die Unterlagen..." vs. "Ich schicke die Unterlagen..." ergaben 2 Objekte.
+   Fix: `_norm_title()` streicht fuehrende Pronomen/Artikel beim Dedup.
+7. **"muss ich"-Obligationen (nachgelagert, behoben):** "Morgen muss ich zum Arzt."
+   -> `mentioned` (obligation, 0.55), nie committed.
+
+### Bekannte False Negatives (dokumentiert, akzeptiert)
+
+"Vielleicht schicke ich es nächste Woche." (invertierte Wortstellung) -> kein
+Commitment; "Erinnerst du dich, dass ich dir das Buch leihe?" -> NONE. Beides
+lieber FN als unbegruendete Verbindlichkeit; LLM-Provider (WP5) kann spaeter
+nachschaerfen.
+
+### Entscheidung
+
+**WP3 ist abnahmefaehig.** Keine kritischen Fehlklassifikationen mit unbegruendeter
+Verbindlichkeit mehr; Lebenszyklus/Provenienz/Scope-Isolation korrekt; wiederholte
+Verarbeitung erzeugt keine Dubletten. **WP2 (Attention Engine) ist technisch
+freigegeben** (Bewertung kann direkt auf commitment-Objekten mit Status/Frist/
+Konfidenz/Scope aufsetzen).

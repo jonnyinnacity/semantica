@@ -2,13 +2,15 @@
 
 Deterministischer, offline arbeitender Detector auf Basis des WP1-Kontextmodells.
 Unterscheidet Erwaehnung (mentioned), Absicht (intent), verbindliche Zusage
-(committed), Erledigung (done) und Absage (rejected). Unklare Faelle werden nie
-stillschweigend als verbindlich behandelt (niedrige Konfidenz + Status mentioned).
+(committed), Erledigung (done) und Absage (rejected). Unklare/hypothetische Faelle
+werden nie stillschweigend als verbindlich behandelt (niedrige Konfidenz + Status
+intent/mentioned).
 
-Regeln: Dedup gegen bestehende Verpflichtungen (gleicher Titel+Scope+Frist =>
-Duplikat), bereits erledigte/verorfene werden nicht wieder geoeffnet, bei
-widerspruechlichen Angaben greift die WP1-Konfliktlogik (conflicts_with).
-Scopes werden 1:1 vom Quell-Item uebernommen (nie automatische Hochstufung).
+Regeln: Dedup gegen bestehende Verpflichtungen (normierter Titel + Scope),
+bereits erledigte/verorfene werden nicht wieder geoeffnet, bei widerspruechlichen
+Angaben greift die WP1-Konfliktlogik (conflicts_with). Scopes werden 1:1 vom
+Quell-Item uebernommen (nie automatische Hochstufung). Mehrere Verpflichtungen
+in einer Nachricht werden einzeln erkannt.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ DONE_MARKERS = (
     "habe ich gemacht",
     "habe ich angerufen",
     "erledigt am",
+    "sind unterwegs",
 )
 REJECT_MARKERS = (
     "abgesagt",
@@ -44,28 +47,87 @@ REJECT_MARKERS = (
     "brauchen wir nicht mehr",
 )
 REQUEST_RE = re.compile(
-    r"(?:kannst du|könntest du|koenntest du|kannst du mir|bitte)\s+(.+?)(?:\?|!|\.|$)",
+    r"(?:kannst du(?: mir)?|könntest du|koenntest du|bitte)\s+(.+?)(?:\?|!|\.|$)",
     re.IGNORECASE,
 )
+QUESTION_RE = re.compile(
+    r"\b(sagen|wissen|erklären|wann|ob|warum|weshalb|wie)\b", re.IGNORECASE
+)
+OWN_VERBS = (
+    "schicke",
+    "liefere",
+    "erledige",
+    "kümmere",
+    "kuemmere",
+    "rufe",
+    "nehme",
+    "kläre",
+    "klaere",
+    "mache",
+    "besorge",
+    "prüfe",
+    "pruefe",
+    "gebe",
+    "reiche",
+    "verspreche",
+)
 OWN_RE = re.compile(
-    r"ich\s+(schicke|liefere|erledige|kümmere|kuemmere|rufe|nehme|kläre|klaere|"
-    r"mache|besorge|prüfe|pruefe|gebe|reiche)\s+(.+?)(?:\s+(?:bis|am|spätestens)\s+"
-    r"(.+?))?(?:\?|!|\.|$)",
+    r"ich\s+(?:" + "|".join(OWN_VERBS) + r")\s*,?\s*(.+?)"
+    r"(?:\s+(?:bis|am|spätestens)\s+(.+?))?(?:\?|!|\.|$)",
     re.IGNORECASE,
 )
 INTENT_RE = re.compile(
-    r"(?:ich\s+(will|m\u00f6chte|moechte|plane|versuche)"
-    r"|wir\s+sollten|ich\s+nehme\s+mir\s+vor)",
+    r"(?:ich\s+(?:will|möchte|moechte|plane|versuche|nehme\s+mir\s+vor|"
+    r"entscheide\s+mich)|wir\s+sollten)",
     re.IGNORECASE,
 )
+HYPOTHETICAL_RE = re.compile(
+    r"(?:vielleicht|eventuell|ggf\.?|mal schauen|ich\s+glaube|"
+    r"bin\s+mir\s+nicht\s+sicher)",
+    re.IGNORECASE,
+)
+FOREIGN_RE = re.compile(
+    r"([A-ZÄÖÜ][\w-]*|@[\w-]+)\s+hat\s+(zugesagt|versprochen|angekündigt)",
+    re.IGNORECASE,
+)
+MUST_RE = re.compile(r"(?:ich\s+muss|muss\s+ich)", re.IGNORECASE)
+SHAFFE_RE = re.compile(r"schaffe\s+ich", re.IGNORECASE)
 MENTION_RE = re.compile(
     r"(?:irgendwann|mal schauen|später|spaeter|eventuell)", re.IGNORECASE
 )
 PERSON_RE = re.compile(r"(?:@([\w-]+)|(?:an|von|bei|fuer|für)\s+([A-ZÄÖÜ][a-zäöüß]+))")
 
+LEADING_FILLER = (
+    "ich ",
+    "mir ",
+    "dir ",
+    "mich ",
+    "den ",
+    "die ",
+    "das ",
+    "dem ",
+    "des ",
+    "einen ",
+    "eine ",
+    "ein ",
+)
+
 
 def _norm(text: str) -> str:
     return " ".join(text.lower().split())
+
+
+def _norm_title(title: str) -> str:
+    """Titel fuer Dubletten-Abgleich: fuehrende Pronomen/Artikel entfernen."""
+    low = _norm(title)
+    changed = True
+    while changed and low:
+        changed = False
+        for filler in LEADING_FILLER:
+            if low.startswith(filler):
+                low = low[len(filler) :]
+                changed = True
+    return low
 
 
 def classify(text: str) -> Optional[Dict[str, Any]]:
@@ -80,14 +142,44 @@ def classify(text: str) -> Optional[Dict[str, Any]]:
             "confidence": 0.85,
             "party": "self",
         }
+    m = FOREIGN_RE.search(text)
+    if m:
+        return {
+            "kind": "foreign_commitment",
+            "status": "committed",
+            "confidence": 0.85,
+            "party": "other",
+            "person": m.group(1),
+            "action": text.strip()[:120],
+        }
     m = REQUEST_RE.search(text)
     if m:
+        action = m.group(1).strip()
+        if " nicht " in f" {action} ":
+            return None
+        if action.endswith("?") or text.rstrip().endswith("?"):
+            if QUESTION_RE.search(action):
+                return None
         return {
             "kind": "request_to_me",
             "status": "mentioned",
             "confidence": 0.75,
             "party": "other",
-            "action": m.group(1).strip(),
+            "action": action,
+        }
+    if INTENT_RE.search(low):
+        return {
+            "kind": "intent",
+            "status": "intent",
+            "confidence": 0.6,
+            "party": "self",
+        }
+    if HYPOTHETICAL_RE.search(low) and OWN_RE.search(text):
+        return {
+            "kind": "hypothetical",
+            "status": "intent",
+            "confidence": 0.5,
+            "party": "self",
         }
     m = OWN_RE.search(text)
     if m:
@@ -96,14 +188,22 @@ def classify(text: str) -> Optional[Dict[str, Any]]:
             "status": "committed",
             "confidence": 0.9,
             "party": "self",
-            "action": m.group(2).strip(),
-            "due_raw": (m.group(3) or "").strip() or None,
+            "action": m.group(1).strip(),
+            "due_raw": (m.group(2) or "").strip() or None,
         }
-    if INTENT_RE.search(low):
+    if SHAFFE_RE.search(low):
         return {
-            "kind": "intent",
-            "status": "intent",
-            "confidence": 0.6,
+            "kind": "own_commitment",
+            "status": "committed",
+            "confidence": 0.8,
+            "party": "self",
+            "action": text.strip()[:120],
+        }
+    if MUST_RE.search(low):
+        return {
+            "kind": "obligation",
+            "status": "mentioned",
+            "confidence": 0.55,
             "party": "self",
         }
     if MENTION_RE.search(low):
@@ -124,6 +224,26 @@ def extract_person(text: str) -> Optional[str]:
     return ("@" + m.group(1)) if m.group(1) else m.group(2)
 
 
+def _segments(text: str) -> List[str]:
+    """Zerlegt eine Nachricht in Einzelaussagen (Satzgrenzen, 'und'/'sowie')."""
+    parts = re.split(r"(?<=[.!?])\s+", text.strip())
+    out: List[str] = []
+    for part in parts:
+        if re.search(r"\s+(?:und|sowie)\s+", part):
+            chunks = re.split(r"\s+(?:und|sowie)\s+", part)
+            out.append(chunks[0])
+            for chunk in chunks[1:]:
+                chunk = chunk.strip()
+                if chunk and not chunk.lower().startswith("ich"):
+                    first = chunk.split()[0].lower().rstrip(".,!?")
+                    if first in OWN_VERBS:
+                        chunk = "ich " + chunk
+                out.append(chunk)
+        else:
+            out.append(part)
+    return [s for s in out if s]
+
+
 class CommitmentManager:
     """Erkennt, dedupliziert und verwaltet Verpflichtungen im Kontextmodell."""
 
@@ -139,18 +259,38 @@ class CommitmentManager:
         source_item_id: Optional[str] = None,
         created_by: str = "owner",
     ) -> List[Dict[str, Any]]:
-        """Text auf Commitments pruefen; liefert Detektionen inkl. Objekten."""
+        """Text auf Commitments pruefen; mehrere Aussagen -> mehrere Detektionen."""
         scope = validate_scope(scope)
+        results: List[Dict[str, Any]] = []
+        for segment in _segments(text):
+            results.extend(
+                self._scan_one(
+                    segment,
+                    source=source,
+                    scope=scope,
+                    source_item_id=source_item_id,
+                    created_by=created_by,
+                )
+            )
+        return results
+
+    def _scan_one(
+        self,
+        text: str,
+        source: str,
+        scope: str,
+        source_item_id: Optional[str],
+        created_by: str,
+    ) -> List[Dict[str, Any]]:
         detection = classify(text)
         if not detection:
             return []
         due = None
-        due_raw = detection.get("due_raw") or text
         try:
-            due = parse_due(due_raw)
+            due = parse_due(detection.get("due_raw") or text)
         except Exception:  # noqa: BLE001 - Datum optional
             due = None
-        person = extract_person(text)
+        person = extract_person(text) or detection.get("person")
         if detection["kind"] == "request_to_me":
             title = detection.get("action") or text.strip()[:80]
             responsible = person
@@ -163,6 +303,7 @@ class CommitmentManager:
             "party": detection.get("party", "self"),
             "responsible": responsible,
             "detection_confidence": detection["confidence"],
+            "due": due,
         }
         existing = self._find_existing(title, scope)
         if existing:
@@ -173,16 +314,13 @@ class CommitmentManager:
                         "detection": detection,
                         "duplicate": True,
                         "note": (
-                            f"bereits {existing['status']} \u2013 "
+                            f"bereits {existing['status']} – "
                             "wird nicht wieder geoeffnet"
                         ),
                     }
                 ]
-            if (
-                (existing.get("meta") or {}).get("due") == due
-                or (existing.get("meta") or {}).get("due") is None
-                and due is None
-            ):
+            existing_due = (existing.get("meta") or {}).get("due")
+            if existing_due == due:
                 return [
                     {
                         "object": existing,
@@ -200,15 +338,16 @@ class CommitmentManager:
             source=source,
             source_item_id=source_item_id,
             created_by=created_by,
-            meta={**meta, "due": due},
+            meta=meta,
         )
         return [{"object": obj, "detection": detection, "duplicate": False}]
 
     def _find_existing(self, title: str, scope: str) -> Optional[Dict[str, Any]]:
+        norm = _norm_title(title)
         for obj in self.store.list_context_objects(
             type_="commitment", scope=scope, include_superseded=False
         ):
-            if _norm(obj["title"]) == _norm(title):
+            if _norm_title(obj["title"]) == norm:
                 return obj
         return None
 
