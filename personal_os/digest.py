@@ -40,8 +40,14 @@ def _fmt_day(iso: Optional[str]) -> str:
         return iso
 
 
-def build_digest(core, now: Optional[datetime] = None) -> Dict[str, Any]:
-    """Sammelt alle relevanten offenen Dinge fuer den heutigen Tag."""
+def build_digest(
+    core, now: Optional[datetime] = None, scope: Optional[str] = None
+) -> Dict[str, Any]:
+    """Sammelt alle relevanten offenen Dinge fuer den heutigen Tag.
+
+    ``scope`` begrenzt die Sicht (z. B. 'work' fuer externe Subjekte);
+    None ist die Owner-Ansicht ueber alle Scopes.
+    """
     now = now or datetime.now()
     cfg = core.config.adhd
     today = now.date().isoformat()
@@ -49,20 +55,23 @@ def build_digest(core, now: Optional[datetime] = None) -> Dict[str, Any]:
     cap = cfg.max_items_per_section
     recent_since = (now - timedelta(hours=24)).isoformat(timespec="seconds")
 
-    open_loops = core.loops.list("open", include_snoozed_until=today)
+    open_loops = core.loops.list("open", include_snoozed_until=today, scope=scope)
     overdue = [lp for lp in open_loops if lp.get("due") and lp["due"] < today]
     due_today = [lp for lp in open_loops if lp.get("due") == today]
     due_soon = [
         lp for lp in open_loops if lp.get("due") and today < lp["due"] <= horizon
     ]
-    stale = core.loops.stale(now)
+    stale = core.loops.stale(now, scope=scope)
     pending_delegations = core.store.list_delegations(status=None)
     pending_delegations = [
-        d for d in pending_delegations if d["status"] in ("pending", "running")
+        d
+        for d in pending_delegations
+        if d["status"] in ("pending", "running")
+        and (scope is None or (d.get("meta") or {}).get("scope", "private") == scope)
     ]
-    recent = core.store.list_items(since=recent_since, limit=50)
+    recent = core.store.list_items(since=recent_since, scope=scope, limit=50)
 
-    top = core.loops.top_thing(now) if cfg.top_thing else None
+    top = core.loops.top_thing(now, scope=scope) if cfg.top_thing else None
 
     return {
         "date": today,
@@ -78,7 +87,7 @@ def build_digest(core, now: Optional[datetime] = None) -> Dict[str, Any]:
             "overdue": len(overdue),
             "stale": len(stale),
             "pending_delegations": len(pending_delegations),
-            "recent_items_24h": core.store.count_items(since=recent_since),
+            "recent_items_24h": core.store.count_items(since=recent_since, scope=scope),
         },
     }
 

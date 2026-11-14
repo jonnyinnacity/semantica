@@ -87,6 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("text")
     ll = loop_sub.add_parser("list", help="Loops listen")
     ll.add_argument("--status", default="open")
+    ll.add_argument("--scope", default=None, choices=["private", "work"])
     d = loop_sub.add_parser("done", help="Loop abschliessen")
     d.add_argument("id")
     s = loop_sub.add_parser("snooze", help="Loop verschieben")
@@ -208,7 +209,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             prio = loop["priority"]
             print(f"Loop angelegt: {loop['id']} – {loop['title']}{due} (P{prio})")
         elif args.loop_command == "list":
-            loops = core.list_loops(status=args.status)
+            loops = core.list_loops(status=args.status, scope=args.scope)
             if not loops:
                 print("Keine Loops.")
             for lp in loops:

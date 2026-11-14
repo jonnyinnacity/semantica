@@ -99,7 +99,7 @@ class KnowledgeMemory:
         results = self.search(query, limit=limit, scope=scope)
         related: List[Dict[str, Any]] = []
         for r in results:
-            related.extend(self.related_entities(r.get("id")))
+            related.extend(self.related_entities(r.get("id"), scope=scope))
         seen, uniq = set(), []
         for e in related:
             key = (e.get("type"), str(e.get("id")).lower())
@@ -108,21 +108,39 @@ class KnowledgeMemory:
                 uniq.append(e)
         return {"query": query, "results": results, "related_entities": uniq[:10]}
 
-    def related_entities(self, item_id: str) -> List[Dict[str, Any]]:
-        """Entitaeten, die im KG mit den Entitaeten eines Eintrags verknuepft sind."""
+    def related_entities(
+        self, item_id: str, scope: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Entitaeten, die im KG mit den Entitaeten eines Eintrags verknuepft sind.
+
+        Bei ``scope`` werden nur Entitaeten geliefert, die auch in Eintraegen
+        desselben Scopes vorkommen (der KG ist global; private Entitaeten duerfen
+        nicht ueber Work-Ergebnisse durchsickern).
+        """
         item = self.store.get_item(item_id)
         if not item:
             return []
         ids = {str(e.get("id")).lower() for e in item.get("entities", [])}
+        allowed: Optional[set] = None
+        if scope is not None:
+            allowed = set()
+            for row in self.store.list_items(scope=scope):
+                allowed.update(
+                    str(e.get("id")).lower() for e in row.get("entities", [])
+                )
         out = []
         for rel in self._kg.get("relationships", []):
             src = str(rel.get("source", "")).lower()
             tgt = str(rel.get("target", "")).lower()
             if src in ids and tgt not in ids:
+                if allowed is not None and tgt not in allowed:
+                    continue
                 out.append(
                     {"id": rel.get("target"), "type": "entity", "via": rel.get("type")}
                 )
             elif tgt in ids and src not in ids:
+                if allowed is not None and src not in allowed:
+                    continue
                 out.append(
                     {"id": rel.get("source"), "type": "entity", "via": rel.get("type")}
                 )

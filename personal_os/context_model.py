@@ -116,15 +116,24 @@ class ContextModel:
         scope: Optional[str] = None,
         status: Optional[str] = None,
         include_superseded: bool = False,
+        include_expired: bool = False,
         limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
-        return self.store.list_context_objects(
+        objs = self.store.list_context_objects(
             type_=type_,
             scope=scope,
             status=status,
             include_superseded=include_superseded,
             limit=limit,
         )
+        if not include_expired:
+            today = utcnow()[:10]
+            objs = [
+                o
+                for o in objs
+                if not o.get("valid_until") or str(o["valid_until"])[:10] >= today
+            ]
+        return objs
 
     def transition(
         self, id_: str, new_status: str, by: str = "owner"

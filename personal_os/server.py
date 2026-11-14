@@ -180,14 +180,19 @@ def create_app(core: PersonalOS):
         denied = await check_auth(request)
         if denied:
             return denied
-        return JSONResponse(core.today())
+        scope = WORK if subject(request) == "external" else None
+        return JSONResponse(core.today(scope=scope))
 
     async def digest_ep(request: Request):
         denied = await check_auth(request)
         if denied:
             return denied
         weekly = request.query_params.get("weekly") in ("1", "true", "yes")
-        text = core.weekly_text() if weekly else core.digest_text()
+        scope = WORK if subject(request) == "external" else None
+        if weekly:
+            text = core.weekly_text()
+        else:
+            text = core.digest_text(scope=scope)
         return JSONResponse({"text": text, "weekly": weekly})
 
     async def loops_list_ep(request: Request):
@@ -219,10 +224,13 @@ def create_app(core: PersonalOS):
         denied = await check_auth(request)
         if denied:
             return denied
-        loop = core.complete_loop(request.path_params["loop_id"])
+        loop = core.loops.get(request.path_params["loop_id"])
         if not loop:
             return JSONResponse({"error": "nicht gefunden"}, status_code=404)
-        return JSONResponse(loop)
+        denied_write = check_write(request, loop.get("scope", PRIVATE))
+        if denied_write:
+            return denied_write
+        return JSONResponse(core.complete_loop(loop["id"]))
 
     async def delegate_ep(request: Request):
         denied = await check_auth(request)
@@ -248,7 +256,14 @@ def create_app(core: PersonalOS):
         if denied:
             return denied
         status = request.query_params.get("status") or None
-        return JSONResponse(core.list_delegations(status=status))
+        delegations = core.list_delegations(status=status)
+        if subject(request) == "external":
+            delegations = [
+                d
+                for d in delegations
+                if (d.get("meta") or {}).get("scope", PRIVATE) == WORK
+            ]
+        return JSONResponse(delegations)
 
     async def sync_ep(request: Request):
         denied = await check_auth(request)

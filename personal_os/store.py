@@ -217,13 +217,20 @@ class SQLiteStore:
             params.append(scope)
         return self._list("items", " AND ".join(where), tuple(params), limit=limit)
 
-    def count_items(self, since: Optional[str] = None) -> int:
-        sql = "SELECT COUNT(*) AS c FROM items"
-        params: tuple = ()
+    def count_items(
+        self, since: Optional[str] = None, scope: Optional[str] = None
+    ) -> int:
+        where, params = [], []
         if since:
-            sql += " WHERE created_at >= ?"
-            params = (since,)
-        return int(self.conn.execute(sql, params).fetchone()["c"])
+            where.append("created_at >= ?")
+            params.append(since)
+        if scope is not None:
+            where.append("scope = ?")
+            params.append(scope)
+        sql = "SELECT COUNT(*) AS c FROM items"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        return int(self.conn.execute(sql, tuple(params)).fetchone()["c"])
 
     def add_loop(self, loop: Dict[str, Any]) -> None:
         self._insert("loops", loop)

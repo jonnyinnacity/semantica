@@ -123,11 +123,17 @@ class PersonalOS:
     def list_delegations(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
         return self.delegations.list(status=status)
 
-    def today(self, now: Optional[datetime] = None) -> Dict[str, Any]:
-        return build_digest(self, now=now)
+    def today(
+        self, now: Optional[datetime] = None, scope: Optional[str] = None
+    ) -> Dict[str, Any]:
+        return build_digest(self, now=now, scope=scope)
 
-    def digest_text(self, now: Optional[datetime] = None) -> str:
-        return render_digest(build_digest(self, now=now), self.config.profile_name)
+    def digest_text(
+        self, now: Optional[datetime] = None, scope: Optional[str] = None
+    ) -> str:
+        return render_digest(
+            build_digest(self, now=now, scope=scope), self.config.profile_name
+        )
 
     def weekly_text(self, now: Optional[datetime] = None) -> str:
         return render_weekly(build_weekly(self, now=now), self.config.profile_name)

@@ -176,3 +176,53 @@ Test: eine Datei `tests/test_mini_os_e2e.py` mit 6–10 Assertions, die exakt di
 1. Welche Systeme sollen **zuerst** angebunden werden (E-Mail + Kalender als Klasse 1)?
 2. Soll es von Anfang an **lokale Modelle** geben (Ollama), oder erst rein deterministisch starten?
 3. Welche Handlungen duerfen jemals **Stufe L3** (kontrolliert ausfuehren) – z. B. nie Versand von E-Mails ohne Klick?
+
+---
+
+## WP1-Abnahmebericht (unabhaengige Pruefung)
+
+Pruefstand: Branch `vibe/personal-os-4e2dc9`, Review-Commit siehe git log
+(«review(personal-os): WP1 acceptance fixes …»). Tests: 83 gesamt OK
+(65 bestehende + 18 neue Negativtests in `tests/test_personal_os_wp1_review.py`),
+pre-commit clean, CLI-/REST-/MCP-Smoke durchgefuehrt.
+
+### Befunde und Korrekturen (alle WP1-intern, jeweils mit Regressionstest)
+
+1. **A2 – KG-Leck in `ask(scope=...)` (relevant, behoben):** `related_entities`
+   griff auf den globalen KG zu; private Entitaeten konnten ueber Work-Treffer
+   durchsickern (`memory.py`). Fix: bei gesetztem Scope werden nur Entitaeten
+   geliefert, die auch in Items desselben Scopes vorkommen. Test:
+   `test_related_entities_do_not_leak_private_via_kg`.
+2. **A2/A3 – REST-Lecks fuer Token-Clients (relevant, behoben):** `/today`,
+   `/digest`, `/delegations` lieferten alle Scopes; `/loops/{id}/done` pruefte
+   keine Schreibberechtigung am Loop-Scope (`server.py`). Fix: externe Subjekte
+   bekommen Scope `work`; Loop-Abschluss und Delegationsliste gefiltert.
+   Tests: `test_rest_token_cannot_escalate`, `test_today_scope_filter`.
+3. **A4 – Redaction-Luecke bei meta-Scopes (relevant, behoben):**
+   `redact_for_external` erkannte Delegationen (`meta.scope`) nicht und liess
+   `instruction` durch (`scopes.py`). Fix: effektiver Scope auch aus `meta`;
+   private Dicts werden auf Stub `{id, scope, redacted}` reduziert.
+   Tests: `test_redact_delegation_payload_with_meta_scope`, `test_redact_nested_mixed_payload`.
+4. **A5 – `valid_until` wurde gespeichert, aber nie gefiltert (nachgelagert, behoben):**
+   `ContextModel.list()` filtert abgelaufene Objekte jetzt default (`include_expired=True` zum Einblenden).
+
+### Verbleibende, dokumentierte Grenzen (nachgelagert)
+
+- **Strukturelle vs. inhaltliche Isolation:** Redaction arbeitet an Scope-Feldern, nicht
+  am Textinhalt. Ein als `work` markierter Eintrag mit privatem Inhalt wird nicht
+  zurueckgehalten (Test `test_structural_boundary_work_object_with_private_text_passes`
+  dokumentiert das). Inhaltliche Klassifikation ist Aufgabe von WP3/WP5; konservativer
+  Default-Scope `private` begrenzt das Risiko.
+- **Ohne `POS_TOKEN` ist jeder Loopback-Client `owner`** (127.0.0.1 only). MCP-stdio
+  gilt als Owner-Kanal (lokaler stdio); REST mit Token als `external`.
+- **Dedup per Content-Hash ist scope-uebergreifend** (gleiches Duplikat in beiden Scopes
+  wird als Duplikat erkannt, bestehender Eintrag bleibt erhalten).
+- **SQLite at rest unverschluesselt** (WP6+ optionale Erweiterung).
+
+### Entscheidung
+
+**WP1 ist abnahmefaehig.** Alle 83 Tests bestehen, keine offenen Blocker,
+Scope-Isolation auf Store/Memory/Loops/Kontext/CLI/REST/MCP nachgewiesen,
+Migration idempotent und bestandserhaltend, Provenienz/Statushistorie/Konflikte
+nachvollziehbar. WP3 (Commitment-Erkennung) kann auf dieser Grundlage sicher
+implementiert werden (eigene Schicht `commitments.py` auf `context_model`).

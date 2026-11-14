@@ -119,33 +119,41 @@ class LoopsManager:
         )
         return self.store.get_loop(id_)
 
-    def due_on(self, day_iso: str) -> List[Dict[str, Any]]:
-        return [lp for lp in self.list("open") if lp.get("due") == day_iso]
+    def due_on(self, day_iso: str, scope: Optional[str] = None) -> List[Dict[str, Any]]:
+        return [lp for lp in self.list("open", scope=scope) if lp.get("due") == day_iso]
 
-    def overdue(self, now: Optional[datetime] = None) -> List[Dict[str, Any]]:
+    def overdue(
+        self, now: Optional[datetime] = None, scope: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         today = (now or datetime.now()).date().isoformat()
-        return [lp for lp in self.list("open") if lp.get("due") and lp["due"] < today]
+        return [
+            lp
+            for lp in self.list("open", scope=scope)
+            if lp.get("due") and lp["due"] < today
+        ]
 
     def due_soon(
-        self, days: int = 3, now: Optional[datetime] = None
+        self, days: int = 3, now: Optional[datetime] = None, scope: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         now = now or datetime.now()
         today = now.date().isoformat()
         horizon = (now + timedelta(days=days)).date().isoformat()
         return [
             lp
-            for lp in self.list("open")
+            for lp in self.list("open", scope=scope)
             if lp.get("due") and today <= lp["due"] <= horizon
         ]
 
-    def stale(self, now: Optional[datetime] = None) -> List[Dict[str, Any]]:
+    def stale(
+        self, now: Optional[datetime] = None, scope: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """Offene Loops ohne Faelligkeit, die lange nicht aktualisiert wurden."""
         now = now or datetime.now()
         threshold = (
             (now - timedelta(days=self.config.adhd.stale_days)).date().isoformat()
         )
         out = []
-        for lp in self.list("open"):
+        for lp in self.list("open", scope=scope):
             if lp.get("due"):
                 continue
             updated = (lp.get("updated_at") or lp.get("created_at") or "")[:10]
@@ -153,9 +161,11 @@ class LoopsManager:
                 out.append(lp)
         return out
 
-    def top_thing(self, now: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
+    def top_thing(
+        self, now: Optional[datetime] = None, scope: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         """Der wichtigste offene Loop (Prioritaet, dann Faelligkeit)."""
-        loops = self.list("open")
+        loops = self.list("open", scope=scope)
         if not loops:
             return None
         loops.sort(

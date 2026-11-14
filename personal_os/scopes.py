@@ -61,6 +61,14 @@ def redact_for_external(data: Any, allow_private: bool = False) -> Any:
     als Nachweis erhalten. ``allow_private=True`` nur nach ausdruecklicher Freigabe.
     """
     if isinstance(data, dict):
+        eff_scope = data.get("scope")
+        if eff_scope is None and isinstance(data.get("meta"), dict):
+            eff_scope = data["meta"].get("scope")
+        if eff_scope == PRIVATE and not allow_private:
+            stub = {"id": data.get("id"), "scope": PRIVATE, "redacted": True}
+            if "type" in data:
+                stub["type"] = data.get("type")
+            return stub
         if "content" in data and "scope" in data:
             return redact_item(data, allow_private=allow_private)
         if "title" in data and "type" in data and "status" in data:
