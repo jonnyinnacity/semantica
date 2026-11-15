@@ -362,3 +362,23 @@ Weekly Review inkl. Aufmerksamkeits-Summen; leere DB sauber.
 **Einsatzfaehig fuer den lokalen, single-user Betrieb** (WP1+WP3+WP2 integriert
 konsistent). Naechste Ausbaustufen (WP4 Autonomie/Freigaben, WP5 Provider,
 WP6 Scopes-Ausbau, WP7 schreibende Connectors) bleiben freigabepflichtig.
+
+---
+
+## Pilotbericht (Realitätsprüfung, Basis 689e146)
+
+Pilotcommit siehe git log. **155 Tests gesamt OK** (146 + 9 Pilot-Tests in
+`tests/test_personal_os_pilot.py`); reproduzierbar via `python examples/personal_os_pilot.py`.
+
+7 simulierte Tage (Mo–So), 33 anonymisierte Informationsereignisse (E-Mail/Chat/
+Notizen/Git/Cal/Web), gemischte Scopes. Kennzahlen: 33 Ereignisse, 0 ungewollte
+Duplikate, 15 Commitments erkannt, 1 Frist-Konflikt korrekt als solcher markiert,
+Personen-Verknüpfung aktiv, Snooze-Zähler aktiv, Ziel ohne Frist sichtbar,
+Work-Scope durchgehend sauber, Backup/Restore/Neustart verlustfrei, frischer
+Start (Config+DB+CLI/REST/MCP) fehlerfrei.
+
+Bekannte Erkennungsgrenzen (FN, dokumentiert): "Buch Rückgabe Bibliothek bis
+Samstag." und "Ich habe die Unterlagen von Anna bekommen." ohne Zusage-Verb
+werden nicht als Commitment erkannt; kein FP mit unbegründeter Verbindlichkeit.
+
+Empfehlung: produktive Eigennutzung lokal freigegeben (single user, local-first).

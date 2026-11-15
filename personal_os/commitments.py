@@ -16,6 +16,7 @@ in einer Nachricht werden einzeln erkannt.
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from .context_model import ContextModel
@@ -258,6 +259,7 @@ class CommitmentManager:
         scope: str = PRIVATE,
         source_item_id: Optional[str] = None,
         created_by: str = "owner",
+        now: Optional[datetime] = None,
     ) -> List[Dict[str, Any]]:
         """Text auf Commitments pruefen; mehrere Aussagen -> mehrere Detektionen."""
         scope = validate_scope(scope)
@@ -270,6 +272,7 @@ class CommitmentManager:
                     scope=scope,
                     source_item_id=source_item_id,
                     created_by=created_by,
+                    now=now,
                 )
             )
         return results
@@ -281,13 +284,14 @@ class CommitmentManager:
         scope: str,
         source_item_id: Optional[str],
         created_by: str,
+        now: Optional[datetime] = None,
     ) -> List[Dict[str, Any]]:
         detection = classify(text)
         if not detection:
             return []
         due = None
         try:
-            due = parse_due(detection.get("due_raw") or text)
+            due = parse_due(detection.get("due_raw") or text, now)
         except Exception:  # noqa: BLE001 - Datum optional
             due = None
         person = extract_person(text) or detection.get("person")
