@@ -87,12 +87,13 @@ class ContextModel:
             updated_at=now,
             meta=meta or {},
         )
-        self.store.add_context_object(obj.to_dict())
         result = obj.to_dict()
         conflict = self._find_conflict(type_, title, exclude_id=obj.id)
         if conflict:
             self.link(obj.id, conflict["id"], "conflicts_with", provenance=source)
             result["conflict_with"] = conflict["id"]
+            obj.meta["conflict_with"] = conflict["id"]
+        self.store.add_context_object(obj.to_dict())
         return result
 
     def _find_conflict(
@@ -108,7 +109,14 @@ class ContextModel:
         return None
 
     def get(self, id_: str) -> Optional[Dict[str, Any]]:
-        return self.store.get_context_object(id_)
+        obj = self.store.get_context_object(id_)
+        return self._surface_conflict(obj)
+
+    @staticmethod
+    def _surface_conflict(obj: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if obj and (obj.get("meta") or {}).get("conflict_with"):
+            obj["conflict_with"] = obj["meta"]["conflict_with"]
+        return obj
 
     def list(
         self,
@@ -133,7 +141,7 @@ class ContextModel:
                 for o in objs
                 if not o.get("valid_until") or str(o["valid_until"])[:10] >= today
             ]
-        return objs
+        return [self._surface_conflict(o) for o in objs]
 
     def transition(
         self, id_: str, new_status: str, by: str = "owner"

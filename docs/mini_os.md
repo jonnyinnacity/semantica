@@ -330,3 +330,35 @@ Pruefstand: Review-Commit siehe git log. Tests: **135 gesamt OK**
 **WP2 ist abnahmefaehig.** Keine kritischen Priorisierungsfehler; Bewertungen
 reproduzierbar/erklärbar; keine operativen Daten veraendert; Scope-Isolation
 vollständig; Digest/Weekly funktionieren; 135 Tests OK.
+
+---
+
+## Integrationsabnahme WP1+WP3+WP2 (Basis a15a251)
+
+Pruefstand: Review-Commit siehe git log. **146 Tests gesamt OK**
+(135 bisherige + 11 Integrations-E2E in `tests/test_personal_os_integration.py`:
+10 Informationsverlaeufe Capture→Kontext→Commitment→Attention→Digest,
+Kontextkontinuität, Priorisierung, Datenschutz, externes REST, Usability).
+
+### Gefundene Integrationsmaengel & Korrekturen
+
+1. **Personen-/Projekt-Verknuepfung fehlte (WP3 A2):** Commitments wurden nicht
+   automatisch mit vorhandenen person/project-Objekten verknuepft.
+   Fix: `_auto_link` in `commitments.py` (Relation `involves`, nur vorhandene
+   Objekte, nur gleicher Scope). Regression: flow_4.
+2. **`conflict_with` war nur im Rueckgabewert, nicht persistiert/lesbar:**
+   Fix: wird jetzt in `meta` gespeichert und von `ContextModel.get/list` als
+   Top-Level-Feld exponiert. Regression: flow_3.
+
+### Bewiesen OK
+
+Multi-Nachrichten-Dedup + Frist-Aenderung als Konflikt; Eskalation ueber Zeit
+(Score steigt, p1, überfällig im Digest); done verschwindet aus Attention;
+private/work strikt getrennt bis REST-extern; Digest cap 3 mit Top-Scores;
+Weekly Review inkl. Aufmerksamkeits-Summen; leere DB sauber.
+
+### Entscheidung
+
+**Einsatzfaehig fuer den lokalen, single-user Betrieb** (WP1+WP3+WP2 integriert
+konsistent). Naechste Ausbaustufen (WP4 Autonomie/Freigaben, WP5 Provider,
+WP6 Scopes-Ausbau, WP7 schreibende Connectors) bleiben freigabepflichtig.

@@ -19,7 +19,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from .context_model import ContextModel
-from .extract import parse_due
+from .extract import extract_entities, parse_due
 from .scopes import PRIVATE, validate_scope
 
 DONE_MARKERS = (
@@ -340,7 +340,30 @@ class CommitmentManager:
             created_by=created_by,
             meta=meta,
         )
+        self._auto_link(obj, text, source)
         return [{"object": obj, "detection": detection, "duplicate": False}]
+
+    def _auto_link(self, obj: Dict[str, Any], text: str, source: str) -> None:
+        """Verknuepft ein Commitment mit vorhandenen Personen/Projekten (WP3 A2)."""
+        names = {
+            str(e.get("id"))
+            for e in extract_entities(text)
+            if e.get("type") == "entity"
+        }
+        person = extract_person(text)
+        if person:
+            names.add(person.lstrip("@"))
+        for type_ in ("person", "project"):
+            for existing in self.context.list(type_=type_, scope=obj["scope"]):
+                if _norm(existing["title"]) in {_norm(n) for n in names}:
+                    already = any(
+                        lnk["target_id"] == existing["id"]
+                        for lnk in self.context.links(obj["id"])
+                    )
+                    if not already:
+                        self.context.link(
+                            obj["id"], existing["id"], "involves", provenance=source
+                        )
 
     def _find_existing(self, title: str, scope: str) -> Optional[Dict[str, Any]]:
         norm = _norm_title(title)
