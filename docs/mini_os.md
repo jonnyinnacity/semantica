@@ -397,3 +397,35 @@ CLI `pos backup <pfad>` und read-only `pos day` (5 Fragen). Keine neuen
 Produktfähigkeiten, kein Echtbetrieb aktiviert, keine produktiven Daten importiert.
 Restrisiken dokumentiert (at-rest unverschlüsselt, Loopback-owner ohne Token,
 MCP-stdio vertrauenswürdig, Scope-Fehlklassifikation, konservative FN).
+
+---
+
+## Aktivierungsbericht Echtbetrieb Phase 1 (Basis 38d7d1d)
+
+Vollständiger Bericht: `docs/echtbetrieb_phase1.md`. **163/163 Tests OK**.
+
+Vorbereitende Sicherheitsprüfung (live gegen Commit 38d7d1d, isoliertes POS_HOME):
+keine kritischen Befunde. Config-Baseline verifiziert (`llm.provider="none"`,
+`connectors={}`, `external_can_see_private=false`, `default_capture_scope=private`,
+`server.host=127.0.0.1`); Secrets nur via Env. REST live getestet: nur 127.0.0.1
+(externe IP → Connection refused, `0.0.0.0` → verweigert), ohne/falsches Token → 401,
+Token-Subjekt `external` → 403 auf private (lesen+schreiben) und Schreibzugriff work,
+work-Lesezugriff ohne private Inhalte. MCP nur stdio (Handshake + `pos_capture`
+verifiziert). Keine externen Modellaufrufe möglich (Guard + Code-Grep: `requests`
+nur in config-gated LLM-/Web-Pfaden). Keine aktiven Connectoren (alle read-only).
+Backup laufender DB + Restore nachgewiesen (`integrity_check ok`, Daten vollständig).
+Befund Dateiberechtigungen (755/644 bei umask 022): Maßnahme `chmod 700 $POS_HOME`,
+dokumentiert. Täglicher Ablauf verifiziert: `pos day`, `pos attention`,
+`pos commitments list`, `pos digest`, `pos status` – Ausgaben aus echten Daten mit
+Scope/Quelle/Begründung.
+
+Aktiviert: separates produktives POS_HOME, ausschließlich manuelles Capture
+(CLI/MCP) – keine E-Mail/Kalender/Web/Git-Connectoren, kein externes LLM, keine
+produktiven Fremddaten. 14-Tage-Messplan definiert (automatische Kennzahlen aus
+DB/Backups vs. manuelles Messprotokoll: erkannte/übersehene/falsch erkannte
+Verpflichtungen, Duplikate, fehlende Verknüpfungen, Relevanz der
+Aufmerksamkeitspunkte, verdrängte Themen, Betriebsfehler; tägliches Backup,
+mindestens ein Restore-Test).
+
+**Status:** Aktivierungsbericht geliefert. Die 14-tägige Messung startet erst nach
+ausdrücklicher Bestätigung; Endabnahme erst nach 14 realen Nutzungstagen.
