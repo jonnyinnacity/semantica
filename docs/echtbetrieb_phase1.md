@@ -16,7 +16,7 @@ Instanz in einem isolierten `POS_HOME` durchgeführt (nicht nur aus Doku/Tests).
 |---|-----------|-----------------------------------|----------|
 | S1 | Installationsstand & Konfiguration | frisches `POS_HOME`, `pos init`, `config.json` gelesen | **PASS** – `llm.provider="none"`, `llm.endpoint=""`, `connectors={}`, `privacy.external_can_see_private=false`, `privacy.default_capture_scope="private"`, `server.host="127.0.0.1"` |
 | S2 | Secrets nur via Env | `config.json` geprüft, `POS_*`-Variablen | **PASS** – keine Secrets in der Datei; nur `POS_TOKEN` / `POS_LLM_API_KEY` als Env referenziert |
-| S3 | Dateiberechtigungen des Datenverzeichnisses | `stat` nach `pos init` (umask 022) | **BEFUND (relevant, nicht kritisch bei Single-User):** Verzeichnis 755, Dateien 644. Maßnahme: `chmod 700 $POS_HOME` auf das produktive Verzeichnis angewendet und in der Betriebsanleitung dokumentiert. At-rest unverschlüsselt bleibt dokumentiertes Restrisiko |
+| S3 | Dateiberechtigungen des Datenverzeichnisses | `stat` nach `pos init` (umask 022): Verzeichnis 755, Dateien 644 | **BEFUND (relevant, nicht kritisch bei Single-User) — im CI-/Sicherheitsgate behoben:** Code legt neue POS_HOME jetzt mit `0700` an, sensible Dateien (`config.json`, `store.db`, `kg.json`, Backups) mit `0600` (auch bei umask 000 getestet); bestehende Verzeichnisse werden nicht ungefragt verändert, Abweichungen meldet `pos status` unter `file_permissions` (nicht-mutierend). At-rest unverschlüsselt bleibt dokumentiertes Restrisiko |
 | S4 | REST nur lokal erreichbar | Server live gestartet; Verbindung über externe Host-IP → `Connection refused`; Start mit `host="0.0.0.0"` → `RuntimeError: Verweigert: '0.0.0.0' ist kein Loopback-Host` | **PASS** – bindet ausschließlich 127.0.0.1 |
 | S5 | REST-Zugriffsschutz mit Token | live: ohne Token → 401, falsches Token → 401, korrektes Token → 200. Token-Subjekt `external`: `scope=private` → 403 (context/loops/commitments/attention), Schreiben `private` **und** `work` → 403, Lesezugriff liefert nur work-Daten (`/today` ohne private Commitments) | **PASS** |
 | S6 | MCP nur stdio | JSON-RPC `initialize`/`tools/list`/`tools/call` über stdin/stdout; `pos_capture` landet mit `source=mcp-check` in der DB | **PASS** – kein Socket |
@@ -132,3 +132,54 @@ Vorlage: Tabelle Tag 1–14 mit Spalten *Datum | neu erkannt | übersehen | FP |
 - Weiterhin gesperrt: WP4/WP5/WP7, eigenständige externe Aktionen, zusätzliche
   Datenquellen ohne Freigabe, automatische Änderung bestehender Verpflichtungen,
   Mehrbenutzerbetrieb.
+
+---
+
+## CI- und Sicherheitsgate (nach Aktivierungsbericht)
+
+**Getestet auf Branch `vibe/personal-os-4e2dc9`, PR #1 (Draft), Head-Commit siehe git log.**
+
+### CI-Status
+
+- GitHub-API `actions/runs`: `total_count = 0` (auch `event=pull_request` = 0) — auf dem
+  Repo existieren **keine Workflow-Runs** (weder main noch Branch).
+- PR #1: `state=OPEN`, `isDraft=true`, `mergeStateStatus=CLEAN`, `statusCheckRollup=[]`;
+  `gh pr checks` → „no checks reported“. Branch-Protection nicht lesbar (Token 403) →
+  keine required status checks.
+- Workflows (ci.yml, security.yml, security-scan.yml, docs.yml, …) sind auf Branch und
+  `main` identisch; PR #1 ändert keine Workflows. `ci.yml` triggert nur auf push→main /
+  PR→main (paths-ignore `**/*.md`) und führt Explorer-Build + Wheel-Build aus, **keine**
+  Python-Tests. Manuelles Auslösen per `gh workflow run` mit diesem Token nicht möglich
+  (Actions-API 404/403).
+- **Bewertung:** keine fehlgeschlagenen oder ausstehenden Checks; „grün“ im Sinne von
+  „keine roten Checks“, da keine laufen (Draft-PR). Lokale Gates als Nachweis:
+  pre-commit-Hooks bei jedem Commit (0 Failed), **171/171 unittest OK**,
+  Paket stdlib-only importierbar.
+
+### Dateiberechtigungen (behoben im Gate)
+
+- Neu: `personal_os/fileperms.py` — `ensure_private_dir` (neues POS_HOME → `0700`,
+  auch bei umask 000), `secure_file` (`config.json`, `store.db`, `kg.json`, Backup-Dateien
+  → `0600`; bestehende verwaltete Dateien werden beim Öffnen gehoben, bestehende
+  **Verzeichnisse** bleiben unangetastet), `permission_report` (nicht-mutierend, via
+  `pos status` → `file_permissions`).
+- Regressionstests: `tests/test_personal_os_fileperms.py` (8 Tests, POSIX): 0700 bei
+  umask 000, 0600 für config/db/kg/Backup, bestehendes 0755-Dir bleibt 0755,
+  Report meldet 0644 ohne Änderung, Reopen hebt Dateien auf 0600.
+- Live-Nachweis: frisches POS_HOME → `700`/`600`; `pos status` zeigt Report mit `ok:true`.
+
+### Aktivierungsgate — Abschließbestätigung
+
+| Kriterium | Status |
+|---|---|
+| CI: keine fehlgeschlagenen/ausstehenden Checks auf Head-Commit | erfüllt (0 Runs, Draft-PR, lokal pre-commit + 171/171 Tests grün) |
+| Sicherheitsanforderungen (Loopback-only, Token, MCP stdio, keine externen LLM-Calls, keine aktiven Connectoren) | erfüllt (S1–S10 oben, live verifiziert) |
+| Dateiberechtigungen 700/600 | erfüllt (code-enforced + Regressionstests + Live-Nachweis) |
+| Backup & Restore nachgewiesen | erfüllt (`pos backup` laufender DB, integrity_check ok, Restore-Test) |
+| Keine externen Datenquellen aktiviert | erfüllt (`connectors={}`) |
+| Kein externes LLM aktiviert | erfüllt (`llm.provider="none"`) |
+| Keine offenen kritischen Befunde | erfüllt |
+
+**Entscheidung: AKTIVIERUNGSBEREIT** (Phase 1 wie freigegeben: nur manuelle Captures,
+separates POS_HOME). PR #1 bleibt Draft (kein Merge ohne Freigabe); die 14-tägige
+Messung startet nicht automatisch.

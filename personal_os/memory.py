@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .extract import extract_entities, extract_triplets, tokenize
+from .fileperms import secure_file
 from .models import MemoryItem
 
 
@@ -155,6 +156,7 @@ class KnowledgeMemory:
 
     def _load_kg(self) -> Dict[str, Any]:
         if self.kg_path.exists():
+            secure_file(self.kg_path)
             try:
                 return json.loads(self.kg_path.read_text(encoding="utf-8"))
             except (ValueError, OSError):
@@ -169,6 +171,7 @@ class KnowledgeMemory:
         self.kg_path.write_text(
             json.dumps(self._kg, indent=2, ensure_ascii=False), encoding="utf-8"
         )
+        secure_file(self.kg_path)
 
     def _merge_into_kg(self, item: MemoryItem) -> None:
         entities = self._kg.setdefault("entities", [])

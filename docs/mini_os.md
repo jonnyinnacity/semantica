@@ -429,3 +429,17 @@ mindestens ein Restore-Test).
 
 **Status:** Aktivierungsbericht geliefert. Die 14-tägige Messung startet erst nach
 ausdrücklicher Bestätigung; Endabnahme erst nach 14 realen Nutzungstagen.
+
+---
+
+## CI- und Sicherheitsgate (nach 444c05f)
+
+CI: keine Workflow-Runs im Repo (API total_count=0), PR #1 Draft ohne required checks,
+`gh pr checks` leer, Branch-Protection via Token nicht lesbar; Workflows unverändert.
+Keine roten Checks; lokale Gates: pre-commit clean, **171/171 Tests OK** (163 + 8 neue
+Fileperms-Tests). Dateiberechtigungen gehärtet: neue POS_HOME 0700, config/store.db/
+kg.json/Backups 0600 (auch bei umask 000), bestehende Verzeichnisse unangetastet,
+nicht-mutierender Report via `pos status` → `file_permissions`
+(`personal_os/fileperms.py`, `tests/test_personal_os_fileperms.py`). Gate-Bericht mit
+Entscheidung **AKTIVIERUNGSBEREIT**: `docs/echtbetrieb_phase1.md`. PR #1 nicht gemergt,
+14-Tage-Messung nicht gestartet.

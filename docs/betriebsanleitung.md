@@ -32,7 +32,13 @@ Attention, MCP-stdio) läuft mit der Stdlib allein.
 ## 3. Datensicherheit (A2)
 
 - **Datenverzeichnis**: `$POS_HOME` enthält `config.json`, `store.db`, `kg.json`.
-  Schutz = Dateisystem-Berechtigungen des OS (chmod 700 empfohlen). **at rest unverschlüsselt** (bekanntes Restrisiko, WP6-Option).
+  **Wird ab jetzt vom Code abgesichert:** neue POS_HOME-Verzeichnisse werden mit
+  `0700` angelegt, sensible Dateien (`config.json`, `store.db`, `kg.json`, Backups)
+  werden auf `0600` gesetzt (POSIX; bei bestehendem Verzeichnis bleiben dessen Rechte
+  unangetastet, verwaltete Dateien werden beim Öffnen auf `0600` gehoben).
+  Prüfung ohne Änderung: `pos status` → Schlüssel `file_permissions`
+  (nicht-mutierender Report, Regressionstests in `tests/test_personal_os_fileperms.py`).
+  **at rest unverschlüsselt** (bekanntes Restrisiko, WP6-Option).
 - **REST**: Loopback-only (andere Hosts werden mit RuntimeError verweigert), optionaler Bearer-Token (`POS_TOKEN`). Ohne Token ist jeder lokale Prozess auf 127.0.0.1 owner — Restrisiko, lokal begrenzt.
 - **MCP**: ausschließlich stdio (kein Netzwerk), gilt als Owner-Kanal.
 - **Externe Datenübertragungen**: im Default-Betrieb **keine** — getestet

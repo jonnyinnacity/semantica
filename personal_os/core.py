@@ -16,6 +16,7 @@ from .config import OSConfig
 from .context_model import ContextModel
 from .delegate import DelegationManager
 from .digest import build_digest, build_weekly, render_digest, render_weekly
+from .fileperms import permission_report
 from .loops import LoopsManager
 from .memory import KnowledgeMemory
 from .permissions import PermissionManager
@@ -165,4 +166,5 @@ class PersonalOS:
             "open_loops": len(self.loops.list("open")),
             "pending_delegations": len(self.list_delegations(status="pending")),
             "connectors": sorted(self.config.connectors.keys()),
+            "file_permissions": permission_report(self.config.data_dir),
         }

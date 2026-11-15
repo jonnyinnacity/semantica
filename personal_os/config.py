@@ -13,6 +13,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from .fileperms import ensure_private_dir, secure_file
+
 DEFAULT_DATA_DIR = Path.home() / ".personal_os"
 ENV_DATA_DIR = "POS_HOME"
 ENV_TOKEN = "POS_TOKEN"
@@ -78,10 +80,11 @@ class OSConfig:
         return Path(self.data_dir) / "config.json"
 
     def save(self) -> None:
-        Path(self.data_dir).mkdir(parents=True, exist_ok=True)
+        ensure_private_dir(self.data_dir)
         self.path.write_text(
             json.dumps(asdict(self), indent=2, ensure_ascii=False), encoding="utf-8"
         )
+        secure_file(self.path)
 
     @classmethod
     def resolve_data_dir(cls, data_dir: Optional[str] = None) -> str:
@@ -104,6 +107,7 @@ class OSConfig:
         path = Path(resolved) / "config.json"
         if not path.exists():
             return cls.create_default(resolved)
+        secure_file(path)
         raw = json.loads(path.read_text(encoding="utf-8"))
         raw["data_dir"] = resolved
         cfg = cls(

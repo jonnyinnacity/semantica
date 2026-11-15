@@ -11,6 +11,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .fileperms import ensure_private_dir, secure_file
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
     id TEXT PRIMARY KEY,
@@ -128,12 +130,13 @@ class SQLiteStore:
 
     def __init__(self, data_dir: str):
         self.path = Path(data_dir) / "store.db"
-        Path(data_dir).mkdir(parents=True, exist_ok=True)
+        ensure_private_dir(data_dir)
         self.conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(_SCHEMA)
         self._migrate()
         self.conn.commit()
+        secure_file(self.path)
 
     def _migrate(self) -> None:
         """Additive Migration (WP1): Scope-Spalten + neue Tabellen, Daten bleiben."""
@@ -165,6 +168,7 @@ class SQLiteStore:
                 raise RuntimeError(f"Backup integrity_check: {ok}")
         finally:
             dest_conn.close()
+        secure_file(dest_path)
         return str(dest_path)
 
     def _row(self, table: str, row: sqlite3.Row) -> Dict[str, Any]:
