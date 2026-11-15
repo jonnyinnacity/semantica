@@ -254,11 +254,12 @@ semantica-server = "semantica.server:main"
 semantica-worker = "semantica.worker:main"
 semantica-explorer = "semantica.explorer:main"
 semantica-mcp = "semantica.mcp_server:main"
+pos = "personal_os.cli:main"
 
 # ---------------- TOOLING ----------------
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["semantica*", "integrations*"]
+include = ["semantica*", "integrations*", "personal_os*"]
 
 [tool.setuptools.package-data]
 # Explicit patterns are more reliable than **/* across setuptools versions.

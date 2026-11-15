@@ -1,0 +1,76 @@
+name: Mini-OS CI
+
+permissions:
+  contents: read
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - 'personal_os/**'
+      - 'tests/test_personal_os*.py'
+      - 'examples/personal_os*.py'
+      - 'docs/personal_os.md'
+      - 'docs/mini_os.md'
+      - 'docs/betriebsanleitung.md'
+      - 'docs/echtbetrieb_phase1.md'
+      - 'docs/echtbetrieb_startpaket.md'
+      - 'docs/ci_nachweis.md'
+      - 'docs/uebergabebericht.md'
+      - 'pyproject.toml'
+      - '.pre-commit-config.yaml'
+      - '.github/workflows/personal-os.yml'
+  push:
+    paths:
+      - 'personal_os/**'
+      - 'tests/test_personal_os*.py'
+      - 'examples/personal_os*.py'
+      - 'docs/personal_os.md'
+      - 'docs/mini_os.md'
+      - 'docs/betriebsanleitung.md'
+      - 'docs/echtbetrieb_phase1.md'
+      - 'docs/echtbetrieb_startpaket.md'
+      - 'docs/ci_nachweis.md'
+      - 'docs/uebergabebericht.md'
+      - 'pyproject.toml'
+      - '.pre-commit-config.yaml'
+      - '.github/workflows/personal-os.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: mini-os-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mini-os:
+    name: Mini-OS Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      # personal_os ist stdlib-only; Voll-Deps installiert die Repo-CI auf main.
+      - name: Install package (no secrets, no external model calls needed)
+        run: pip install --no-deps -e .
+      # Optionale Test-Abhaengigkeiten der REST-/No-Network-Tests (leicht, pure wheels)
+      - name: Install optional test deps (starlette/httpx/requests/uvicorn)
+        run: pip install starlette httpx requests uvicorn
+      - name: CLI smoke test (pos entry point)
+        run: pos --help
+      - name: Full Mini-OS test suite
+        run: python -m unittest discover -s tests -p "test_personal_os*.py"
+      - name: Format and lint (pre-commit on Mini-OS files)
+        run: |
+          pip install pre-commit
+          pre-commit run --files \
+            personal_os/*.py personal_os/connectors/*.py \
+            tests/test_personal_os*.py examples/personal_os*.py \
+            docs/personal_os.md docs/mini_os.md docs/betriebsanleitung.md \
+            docs/echtbetrieb_phase1.md docs/echtbetrieb_startpaket.md \
+            docs/ci_nachweis.md docs/uebergabebericht.md \
+            .github/workflows/personal-os.yml
