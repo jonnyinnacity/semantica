@@ -158,3 +158,24 @@ Deterministischer, offline arbeitender Detector auf dem WP1-Kontextmodell.
   CLI `pos commitments list|scan|confirm|close`; REST `/commitments`,
   `/commitments/scan`, `/commitments/{id}/transition` (externe Subjekte nur `work`,
   Schreiben geprüft); MCP `pos_commitments_list|scan|transition`.
+
+## WP2: Attention Engine (`attention.py`)
+
+Deterministische, erklaerbare Bewertungsschicht (read-only: keine Statusaenderungen,
+kein LLM, keine Planung). Bewertet Kontextobjekte + offene Loops.
+
+- **Gewichtung (explizit in `WEIGHTS`):** Dringlichkeit (ueberfaellig 30+5/Tag max 7d,
+  heute 30, <=3d 18, <=7d 10) · Verbindlichkeit (committed 25 / intent 10 /
+  mentioned 5) · Kontext nur ueber vorhandene Links (blocks/depends_on +15,
+  goal_of/part_of/works_on +10) · stale +10. Niedrige Konfidenz mindert den Score
+  NICHT, sondern erzeugt Klaerungsbedarf (`missing_info`).
+- **Erklaerbarkeit (A2):** jedes Item enthaelt Objekt, Scope, Score, Priority
+  (p1>=60/p2>=35/p3), Kategorie (action/clarification/observe), Faktoren, Grund-Text,
+  Quellen, `evaluated_at`, `missing_info`; Evaluierungen werden in der additiven
+  Tabelle `attention_evals` protokolliert.
+- **Attention statt Aufgabenflut (A3):** Dedup ueber normierten Titel+Scope;
+  done/rejected/abgelaufene/snoozed Objekte ausgeschlossen.
+- **Integration:** Daily Digest um "Aufmerksamkeitspunkte" (max `adhd.attention_points`=3)
+  erweitert, Weekly Review um Kategorie-Summen; bestehende Digest-Funktionen bleiben.
+- **Schnittstellen (lesend):** CLI `pos attention [--scope] [--limit]`,
+  REST `GET /attention`, MCP `pos_attention`; WP1-Scope-Regeln greifen (external nur work).

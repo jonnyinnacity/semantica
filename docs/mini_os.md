@@ -115,6 +115,16 @@ Capture-Hook + CLI/REST/MCP. 15 neue Tests; 98 gesamt OK; pre-commit clean.
 
 Naechster Schritt: WP2 (Attention Engine) — wartet auf Freigabe.
 
+## WP2-Status: IMPLEMENTIERT (Branch vibe/personal-os-4e2dc9)
+
+Attention Engine in `personal_os/attention.py` (deterministisch, read-only,
+erklaerbar): explizite Gewichtung, Kategorien action/clarification/observe,
+Dedup pro Thema, Ausschluss erledigter/abgelaufener Objekte, Evaluierungen in
+`attention_evals` protokolliert. Integration in Daily Digest (max 3 Punkte mit
+Begruendung) + Weekly Review; CLI `pos attention`, REST `/attention`, MCP
+`pos_attention`; WP1-Scope-Regeln uebernommen. 13 neue Tests; **124 gesamt OK**;
+pre-commit clean. Abnahme steht noch aus (gesonderte technische Pruefung).
+
 ## 3. Priorisierter Implementierungsplan (Arbeitspakete)
 
 Jedes WP ist einzeln testbar und merged-faehig. Reihenfolge nach Nutzen/Aufwand.

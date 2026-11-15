@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from . import inbox as inbox_mod
+from .attention import AttentionEngine
 from .commitments import CommitmentManager
 from .config import OSConfig
 from .context_model import ContextModel
@@ -34,6 +35,7 @@ class PersonalOS:
         self.context = ContextModel(self.store)
         self.permissions = PermissionManager(self.store, self.config)
         self.commitments = CommitmentManager(self.store)
+        self.attention = AttentionEngine(self)
 
     def close(self) -> None:
         self.store.close()
@@ -129,6 +131,15 @@ class PersonalOS:
         self, now: Optional[datetime] = None, scope: Optional[str] = None
     ) -> Dict[str, Any]:
         return build_digest(self, now=now, scope=scope)
+
+    def attention_points(
+        self,
+        now: Optional[datetime] = None,
+        scope: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """WP2: erklaerbare Aufmerksamkeitsbewertung (read-only)."""
+        return self.attention.evaluate(now=now, scope=scope, limit=limit)
 
     def digest_text(
         self, now: Optional[datetime] = None, scope: Optional[str] = None

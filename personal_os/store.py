@@ -96,6 +96,23 @@ CREATE TABLE IF NOT EXISTS permissions (
 );
 """
 
+_WP2_SCHEMA = """
+CREATE TABLE IF NOT EXISTS attention_evals (
+    id TEXT PRIMARY KEY,
+    evaluated_at TEXT DEFAULT '',
+    scope TEXT DEFAULT 'private',
+    object_id TEXT NOT NULL,
+    object_type TEXT DEFAULT '',
+    score INTEGER DEFAULT 0,
+    priority TEXT DEFAULT 'p3',
+    category TEXT DEFAULT 'observe',
+    factors TEXT DEFAULT '{}',
+    reason TEXT DEFAULT '',
+    sources TEXT DEFAULT '[]',
+    missing_info TEXT DEFAULT '[]'
+);
+"""
+
 _JSON_COLS = {
     "items": ["tags", "entities", "triplets", "embedding", "meta"],
     "loops": ["tags", "meta"],
@@ -128,6 +145,7 @@ class SQLiteStore:
                     "DEFAULT 'private'"
                 )
         self.conn.executescript(_WP1_SCHEMA)
+        self.conn.executescript(_WP2_SCHEMA)
 
     def close(self) -> None:
         self.conn.close()
@@ -338,6 +356,31 @@ class SQLiteStore:
             (subject, action, scope),
         )
         self.conn.commit()
+
+    def add_attention_eval(self, ev: Dict[str, Any]) -> None:
+        data = dict(ev)
+        for col in ("factors", "sources", "missing_info"):
+            if col in data and not isinstance(data[col], str):
+                data[col] = json.dumps(data[col], ensure_ascii=False)
+        self._insert("attention_evals", data)
+
+    def list_attention_evals(
+        self, object_id: Optional[str] = None, limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        where, params = "", ()
+        if object_id:
+            where, params = "object_id = ?", (object_id,)
+        rows = self._list(
+            "attention_evals", where, params, order="evaluated_at DESC", limit=limit
+        )
+        for r in rows:
+            for col in ("factors", "sources", "missing_info"):
+                if isinstance(r.get(col), str):
+                    try:
+                        r[col] = json.loads(r[col])
+                    except (ValueError, TypeError):
+                        r[col] = []
+        return rows
 
     def kv_get(self, key: str, default: Optional[str] = None) -> Optional[str]:
         row = self.conn.execute("SELECT value FROM kv WHERE key = ?", (key,)).fetchone()

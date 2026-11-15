@@ -123,6 +123,10 @@ def build_parser() -> argparse.ArgumentParser:
     cd.add_argument("id")
     cd.add_argument("--status", default="done", choices=["done", "rejected"])
 
+    c = sub.add_parser("attention", help="WP2: Aufmerksamkeitspunkte mit Begruendung")
+    c.add_argument("--scope", default=None, choices=["private", "work"])
+    c.add_argument("--limit", type=int, default=None)
+
     sub.add_parser("status", help="Uebersicht ueber das OS")
 
     c = sub.add_parser("serve", help="lokalen API-Server starten (nur 127.0.0.1)")
@@ -295,6 +299,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         elif args.commitments_command == "close":
             o = core.commitments.close(args.id, status=args.status)
             print(f"{o['id']}: {o['status']}")
+    elif args.command == "attention":
+        result = core.attention_points(scope=args.scope, limit=args.limit)
+        if not result["items"]:
+            print("Keine Aufmerksamkeitspunkte.")
+        for a in result["items"]:
+            print(
+                f"[{a['priority']}] ({a['category']}, Score {a['score']}) "
+                f"{a['title']} – {a['reason']}"
+            )
+            if a.get("missing_info"):
+                print(f"    fehlt: {', '.join(a['missing_info'])}")
     elif args.command == "status":
         _print_json(core.stats())
     elif args.command == "serve":

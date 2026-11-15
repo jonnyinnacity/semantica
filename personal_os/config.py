@@ -29,6 +29,7 @@ class ADHDConfig:
     nudge_minutes: int = 60
     weekly_review_weekday: int = 6
     top_thing: bool = True
+    attention_points: int = 3
 
 
 @dataclass

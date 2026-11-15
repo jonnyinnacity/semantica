@@ -183,6 +183,17 @@ TOOLS = [
         },
     },
     {
+        "name": "pos_attention",
+        "description": "WP2: erklaerbare Aufmerksamkeitspunkte (read-only).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "scope": {"type": "string", "enum": ["private", "work"]},
+                "limit": {"type": "integer"},
+            },
+        },
+    },
+    {
         "name": "pos_commitments_transition",
         "description": "WP3: Commitments listen (filter: scope/status).",
         "inputSchema": {
@@ -324,6 +335,11 @@ def _dispatch(core: PersonalOS, name: str, args: Dict[str, Any]) -> Any:
             args.get("text", ""),
             source=args.get("source", "mcp"),
             scope=args.get("scope") or "private",
+        )
+    if name == "pos_attention":
+        return core.attention_points(
+            scope=args.get("scope") or None,
+            limit=int(args["limit"]) if args.get("limit") else None,
         )
     if name == "pos_commitments_transition":
         return core.context.transition(

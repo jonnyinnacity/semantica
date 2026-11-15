@@ -19,6 +19,7 @@ URL_EMAIL_RE = re.compile(r"(https?://[^\s]+|[\w.+-]+@[\w-]+\.[\w.]+)")
 TAG_RE = re.compile(r"#([\w-]+)")
 MENTION_RE = re.compile(r"@([\w-]+)")
 DATE_RE = re.compile(r"\b(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?\b")
+ISO_DATE_RE = re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b")
 IN_DAYS_RE = re.compile(r"\bin\s+(\d+)\s+(?:tagen?|d)\b", re.IGNORECASE)
 
 WEEKDAYS = {
@@ -138,6 +139,12 @@ def parse_due(text: str, now: Optional[datetime] = None) -> Optional[str]:
                 return (now + timedelta(days=days_ahead or 7)).date().isoformat()
             days_ahead = (wd - now.weekday()) % 7
             return (now + timedelta(days=days_ahead)).date().isoformat()
+    m = ISO_DATE_RE.search(low)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3))).isoformat()
+        except ValueError:
+            return None
     m = DATE_RE.search(low)
     if m:
         day, month = int(m.group(1)), int(m.group(2))

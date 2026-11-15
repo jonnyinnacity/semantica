@@ -317,6 +317,20 @@ def create_app(core: PersonalOS):
             return JSONResponse({"error": str(exc)}, status_code=400)
         return JSONResponse(obj)
 
+    async def attention_ep(request: Request):
+        denied = await check_auth(request)
+        if denied:
+            return denied
+        requested = request.query_params.get("scope") or None
+        scope, err = resolve_read_scope(request, requested)
+        if err:
+            return err
+        limit = request.query_params.get("limit")
+        result = core.attention_points(scope=scope, limit=int(limit) if limit else None)
+        if subject(request) == "external":
+            result["items"] = core.redact_for_external(result["items"])
+        return JSONResponse(result)
+
     async def sync_ep(request: Request):
         denied = await check_auth(request)
         if denied:
@@ -350,6 +364,7 @@ def create_app(core: PersonalOS):
             commitments_transition_ep,
             methods=["POST"],
         ),
+        Route("/attention", attention_ep),
         Route("/sync", sync_ep, methods=["POST"]),
         Route("/stats", stats_ep),
     ]

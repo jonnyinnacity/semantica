@@ -73,8 +73,16 @@ def build_digest(
 
     top = core.loops.top_thing(now, scope=scope) if cfg.top_thing else None
 
+    attention = []
+    engine = getattr(core, "attention", None)
+    if engine is not None:
+        attention = engine.evaluate(now=now, scope=scope, limit=cfg.attention_points)[
+            "items"
+        ]
+
     return {
         "date": today,
+        "attention": attention,
         "top_thing": top,
         "overdue": sorted(overdue, key=lambda lp: lp["due"])[:cap],
         "due_today": sorted(due_today, key=lambda lp: -lp.get("priority", 1))[:cap],
@@ -102,8 +110,15 @@ def build_weekly(core, now: Optional[datetime] = None) -> Dict[str, Any]:
     delegations_week = [
         d for d in delegations if (d.get("updated_at") or "") >= week_ago
     ]
+    attention_summary = None
+    engine = getattr(core, "attention", None)
+    if engine is not None:
+        ev = engine.evaluate(now=now, scope=None)
+        attention_summary = ev["counts"]
+
     return {
         "week_start": (now - timedelta(days=now.weekday())).date().isoformat(),
+        "attention_summary": attention_summary,
         "done_loops_week": done_week,
         "done_delegations_week": delegations_week,
         "open_loops": core.loops.list("open"),
@@ -129,6 +144,19 @@ def render_digest(digest: Dict[str, Any], profile_name: str = "Ich") -> str:
     top = digest.get("top_thing")
     if top:
         lines += ["## 🎯 Das wichtigste Ding heute", _render_loop(top), ""]
+
+    attention = digest.get("attention", [])
+    if attention:
+        lines += ["## 🧭 Aufmerksamkeitspunkte (WP2)"]
+        cat_emoji = {"action": "⚡", "clarification": "❓", "observe": "👀"}
+        for a in attention:
+            lines.append(
+                f"- {cat_emoji.get(a['category'], '•')} [{a['priority']}] "
+                f"**{a['title']}** (Score {a['score']}) – {a['reason']}"
+            )
+            if a.get("missing_info"):
+                lines.append(f"  - fehlt: {', '.join(a['missing_info'])}")
+        lines.append("")
 
     if digest["overdue"]:
         lines += (
@@ -204,4 +232,10 @@ def render_weekly(weekly: Dict[str, Any], profile_name: str = "Ich") -> str:
         f"## 🧠 Wissensspeicher: {ms['items']} Einträge · {ms['entities']} Entitäten · "
         f"{ms['relationships']} Relationen · {weekly['items_week']} neu diese Woche"
     )
+    if weekly.get("attention_summary"):
+        s = weekly["attention_summary"]
+        lines.append(
+            f"## 🧭 Aufmerksamkeit: {s['action']} handlungsbedarf · "
+            f"{s['clarification']} klärungsbedarf · {s['observe']} beobachtung"
+        )
     return "\n".join(lines)
