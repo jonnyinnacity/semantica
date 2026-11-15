@@ -127,6 +127,17 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--scope", default=None, choices=["private", "work"])
     c.add_argument("--limit", type=int, default=None)
 
+    c = sub.add_parser(
+        "day",
+        help="taeglicher Ablauf: 5 Fragen auf Basis vorhandener Daten (read-only)",
+    )
+    c.add_argument("--scope", default=None, choices=["private", "work"])
+
+    c = sub.add_parser(
+        "backup", help="konsistentes Backup der laufenden DB (SQLite-Backup-API)"
+    )
+    c.add_argument("path")
+
     sub.add_parser("status", help="Uebersicht ueber das OS")
 
     c = sub.add_parser("serve", help="lokalen API-Server starten (nur 127.0.0.1)")
@@ -310,6 +321,63 @@ def main(argv: Optional[List[str]] = None) -> int:
             )
             if a.get("missing_info"):
                 print(f"    fehlt: {', '.join(a['missing_info'])}")
+    elif args.command == "day":
+        scope = args.scope
+        att = core.attention_points(scope=scope, limit=3)
+        commitments = core.commitments.list(scope=scope)
+        print("1) Was braucht heute meine Aufmerksamkeit?")
+        if not att["items"]:
+            print("   - nichts erkannt")
+        for a in att["items"]:
+            print(f"   - [{a['priority']}] {a['title']} – {a['reason']}")
+            if a.get("missing_info"):
+                print(f"     unklar: {', '.join(a['missing_info'])}")
+        print("2) Welche Zusagen sind offen?")
+        open_com = [o for o in commitments if o["status"] in ("committed", "intent")]
+        if not open_com:
+            print("   - keine")
+        for o in open_com:
+            due = (o.get("meta") or {}).get("due") or "ohne Frist"
+            print(f"   - {o['title']} (bis {due}, Status {o['status']})")
+        print("3) Worauf warte ich?")
+        waiting = [
+            o
+            for o in commitments
+            if o["status"] == "mentioned"
+            and (o.get("meta") or {}).get("kind")
+            in ("request_to_me", "foreign_commitment")
+        ]
+        if not waiting:
+            print("   - nichts")
+        for o in waiting:
+            resp = (o.get("meta") or {}).get("responsible") or "unbekannt"
+            print(f"   - {o['title']} (von/bei {resp})")
+        print("4) Welche wichtigen Themen geraten aus dem Blick?")
+        stale = core.loops.stale(scope=scope)
+        goals = [
+            i
+            for i in core.attention_points(scope=scope)["items"]
+            if i["object_type"] in ("goal", "project")
+        ]
+        if not stale and not goals:
+            print("   - keine")
+        for lp in stale:
+            print(print(f"   - Loop unbearbeitet: {lp['title']}"))
+        for g in goals:
+            print(f"   - {g['object_type']}: {g['title']} (Score {g['score']})")
+        print("5) Welche Informationen muss ich noch klären?")
+        clar = [
+            i
+            for i in core.attention_points(scope=scope)["items"]
+            if i["category"] == "clarification"
+        ]
+        if not clar:
+            print("   - keine offenen Klärungen")
+        for i in clar[:5]:
+            print(f"   - {i['title']}: {', '.join(i.get('missing_info') or ['?'])}")
+    elif args.command == "backup":
+        path = core.store.backup(args.path)
+        print(f"Backup geschrieben: {path} (integrity_check ok)")
     elif args.command == "status":
         _print_json(core.stats())
     elif args.command == "serve":

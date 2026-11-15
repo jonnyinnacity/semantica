@@ -382,3 +382,18 @@ Samstag." und "Ich habe die Unterlagen von Anna bekommen." ohne Zusage-Verb
 werden nicht als Commitment erkannt; kein FP mit unbegründeter Verbindlichkeit.
 
 Empfehlung: produktive Eigennutzung lokal freigegeben (single user, local-first).
+
+---
+
+## Betriebsbereitschaft (Basis 7f19dc4)
+
+Betriebscommit siehe git log. **163 Tests gesamt OK** (155 + 8 Betriebs-Tests in
+`tests/test_personal_os_ops.py`), pre-commit clean. Deliverables:
+`docs/betriebsanleitung.md` (Installation/Start/Neustart/Config/Troubleshooting,
+Sicherheitsprüfung, Backup laufender DB via SQLite-Backup-API + `pos backup`,
+Restore, read-only Importkonzept, 14-Tage-Messplan, täglicher Ablauf `pos day`).
+Neu im bestehenden Umfang: `store.backup()` (konsistent, integrity_check),
+CLI `pos backup <pfad>` und read-only `pos day` (5 Fragen). Keine neuen
+Produktfähigkeiten, kein Echtbetrieb aktiviert, keine produktiven Daten importiert.
+Restrisiken dokumentiert (at-rest unverschlüsselt, Loopback-owner ohne Token,
+MCP-stdio vertrauenswürdig, Scope-Fehlklassifikation, konservative FN).

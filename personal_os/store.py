@@ -150,6 +150,23 @@ class SQLiteStore:
     def close(self) -> None:
         self.conn.close()
 
+    def backup(self, dest: str) -> str:
+        """Konsistentes Backup der LAUFENDEN Datenbank via SQLite-Backup-API.
+
+        Liefert den Pfad der Backup-Datei; integrity_check inklusive.
+        """
+        dest_path = Path(dest)
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        dest_conn = sqlite3.connect(str(dest_path))
+        try:
+            self.conn.backup(dest_conn)
+            ok = dest_conn.execute("PRAGMA integrity_check").fetchone()[0]
+            if ok != "ok":
+                raise RuntimeError(f"Backup integrity_check: {ok}")
+        finally:
+            dest_conn.close()
+        return str(dest_path)
+
     def _row(self, table: str, row: sqlite3.Row) -> Dict[str, Any]:
         data = dict(row)
         for col in _JSON_COLS.get(table, []):
