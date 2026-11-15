@@ -459,3 +459,20 @@ behoben. Verbleibend: „Verify Action Pins“ fällt repo-weit wegen Upstream-T
 nicht von PR #1 berührten Workflows fehl (personal-os.yml selbst OK). Bericht:
 `docs/ci_nachweis.md`. **Ergebnis: BESTANDEN.** PR #1 bleibt Draft; 14-Tage-Messung
 nicht gestartet.
+
+---
+
+## Übergabebericht Abschlussgate (Basis f634e04)
+
+Verbindliche Baseline: Code `f634e04` = PR-Head (#1, Draft, ungemergt) + CI-Nachweis
+(Runs 43776488507 pull_request / 43776481280 push, success; 171/171 Tests auf
+Python 3.11+3.12, pre-commit clean) + lokale 171/171. Repo-weiter Action-Pin-Befund
+ausdrücklich außerhalb des Mini-OS-Umfangs (keine fremden Workflows geändert).
+Betriebsbasis live geprüft: bestehende Installation datenerhalten (items 6→6,
+loops 2→2, integrity ok, idempotentes Reopen), frischer Start + Backup + Restore auf
+f634e04 reproduzierbar, Dateiberechtigungen 700/600. Aktiviert: nur manuelles
+Capture; keine Connectoren, kein externes LLM, keine autonomen Aktionen.
+Startpaket für Phase 1: `docs/echtbetrieb_startpaket.md` (Voraussetzungen, täglicher
+Ablauf, Backup-Routine, 14-Tage-Messprotokoll, Abbruchkriterien). Vollständiger
+Bericht: `docs/uebergabebericht.md`. **Echtbetrieb nicht aktiviert; 14-Tage-Messung
+wartet auf ausdrückliche Bestätigung; PR #1 nicht gemergt.**

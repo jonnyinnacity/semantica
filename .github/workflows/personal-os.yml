@@ -14,7 +14,9 @@ permissions:
       - 'docs/mini_os.md'
       - 'docs/betriebsanleitung.md'
       - 'docs/echtbetrieb_phase1.md'
+      - 'docs/echtbetrieb_startpaket.md'
       - 'docs/ci_nachweis.md'
+      - 'docs/uebergabebericht.md'
       - 'pyproject.toml'
       - '.pre-commit-config.yaml'
       - '.github/workflows/personal-os.yml'
@@ -27,7 +29,9 @@ permissions:
       - 'docs/mini_os.md'
       - 'docs/betriebsanleitung.md'
       - 'docs/echtbetrieb_phase1.md'
+      - 'docs/echtbetrieb_startpaket.md'
       - 'docs/ci_nachweis.md'
+      - 'docs/uebergabebericht.md'
       - 'pyproject.toml'
       - '.pre-commit-config.yaml'
       - '.github/workflows/personal-os.yml'
@@ -67,5 +71,6 @@ jobs:
             personal_os/*.py personal_os/connectors/*.py \
             tests/test_personal_os*.py examples/personal_os*.py \
             docs/personal_os.md docs/mini_os.md docs/betriebsanleitung.md \
-            docs/echtbetrieb_phase1.md docs/ci_nachweis.md \
+            docs/echtbetrieb_phase1.md docs/echtbetrieb_startpaket.md \
+            docs/ci_nachweis.md docs/uebergabebericht.md \
             .github/workflows/personal-os.yml
