@@ -291,3 +291,42 @@ Verbindlichkeit mehr; Lebenszyklus/Provenienz/Scope-Isolation korrekt; wiederhol
 Verarbeitung erzeugt keine Dubletten. **WP2 (Attention Engine) ist technisch
 freigegeben** (Bewertung kann direkt auf commitment-Objekten mit Status/Frist/
 Konfidenz/Scope aufsetzen).
+
+---
+
+## WP2-Abnahmebericht (unabhaengige Pruefung, Basis 01edc6a)
+
+Pruefstand: Review-Commit siehe git log. Tests: **135 gesamt OK**
+(124 bisherige + 11 neue in `tests/test_personal_os_wp2_review.py`, inkl.
+20-Szenarien-Praxiskorpus + 14-Situationen-Alltagsszenario), pre-commit clean.
+
+### Gefundene Maengel & Korrekturen (WP2-intern, mit Regressionstests)
+
+1. **Langfristig wichtige Themen wurden von reiner Dringlichkeit verdraengt
+   (fachlich relevant, behoben):** Ziele/Projekte ohne Frist kamen nur auf
+   Score 5 (p3) und fielen bei Limit 3 aus dem Digest. Fix: explizite
+   Typ-Wichtigkeit `TYPE_IMPORTANCE` (goal +15, project +10, area +5) mit
+   Begruendung im Reason.
+2. **Unkontrolliertes Wachstum von `attention_evals` (relevant, behoben):**
+   jede Evaluation legte Zeilen an. Fix: eindeutige IDs + Pruning auf die
+   neuesten 10 pro Objekt (`prune_attention_evals`); Test mit 25 Evaluations.
+3. **Routinetasks ohne Frist wurden als Klaerungsbedarf markiert (relevant,
+   behoben):** `keine Frist hinterlegt` jetzt nur fuer Commitments, nicht fuer
+   gewoehnliche Loops.
+4. **Wiederholt verschobene Aufgaben waren unsichtbar (relevant, behoben):**
+   `snooze` zaehlt jetzt `meta.snooze_count`; Attention addiert +5 mit
+   Begruendung ab 2 Verschiebungen (sichtbar, sobald nicht mehr snoozed).
+5. **REST `/attention?limit=abc` lieferte 500 (nachgelagert, behoben):** -> 400.
+
+### Bewusste fachliche Einordnungen (dokumentiert)
+
+- done/rejected/abgelaufen/snoozed erscheinen nicht erneut (getestet).
+- Niedrige Konfidenz senkt nie den Score, sondern erzeugt Klaerungsbedarf.
+- Sortierung (-score, due, id) stabil; Digest-Cap 3 zeigt immer die Top-Scores.
+- Zeitstempel: Fristen als lokale Datumswerte, `evaluated_at` in UTC (dokumentiert).
+
+### Entscheidung
+
+**WP2 ist abnahmefaehig.** Keine kritischen Priorisierungsfehler; Bewertungen
+reproduzierbar/erklärbar; keine operativen Daten veraendert; Scope-Isolation
+vollständig; Digest/Weekly funktionieren; 135 Tests OK.

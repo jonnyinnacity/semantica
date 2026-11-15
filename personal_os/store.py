@@ -382,6 +382,18 @@ class SQLiteStore:
                         r[col] = []
         return rows
 
+    def prune_attention_evals(self, object_id: str, keep: int = 10) -> None:
+        """Begrenzt attention_evals auf die neuesten `keep` Eintraege pro Objekt."""
+        rows = self._list(
+            "attention_evals",
+            "object_id = ?",
+            (object_id,),
+            order="evaluated_at DESC",
+        )
+        for row in rows[keep:]:
+            self.conn.execute("DELETE FROM attention_evals WHERE id = ?", (row["id"],))
+        self.conn.commit()
+
     def kv_get(self, key: str, default: Optional[str] = None) -> Optional[str]:
         row = self.conn.execute("SELECT value FROM kv WHERE key = ?", (key,)).fetchone()
         return row["value"] if row else default

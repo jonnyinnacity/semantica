@@ -107,7 +107,11 @@ class LoopsManager:
         if not loop:
             return None
         until = (datetime.now() + timedelta(days=days)).date().isoformat()
-        self.store.update_loop(id_, {"snooze_until": until, "updated_at": utcnow()})
+        count = int((loop.get("meta") or {}).get("snooze_count", 0)) + 1
+        meta = {**(loop.get("meta") or {}), "snooze_count": count}
+        self.store.update_loop(
+            id_, {"snooze_until": until, "updated_at": utcnow(), "meta": meta}
+        )
         return self.store.get_loop(id_)
 
     def reopen(self, id_: str) -> Optional[Dict[str, Any]]:

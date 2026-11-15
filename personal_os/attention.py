@@ -43,6 +43,11 @@ WEIGHTS = {
 
 PRIORITY_THRESHOLDS = {"p1": 60, "p2": 35}
 
+TYPE_IMPORTANCE = {"goal": 15, "project": 10, "area": 5}
+SNOOZE_REPEAT_MIN = 2
+SNOOZE_REPEAT_POINTS = 5
+EVAL_KEEP_PER_OBJECT = 10
+
 
 def _norm_title(title: str) -> str:
     low = " ".join((title or "").lower().split())
@@ -99,7 +104,13 @@ class AttentionEngine:
                         "confidence": 1.0,
                         "source": "loop",
                         "source_item_id": None,
-                        "meta": {"due": lp.get("due"), "responsible": None},
+                        "meta": {
+                            "due": lp.get("due"),
+                            "responsible": None,
+                            "snooze_count": (lp.get("meta") or {}).get(
+                                "snooze_count", 0
+                            ),
+                        },
                         "updated_at": lp.get("updated_at", ""),
                         "valid_until": None,
                     },
@@ -130,7 +141,7 @@ class AttentionEngine:
             item["evaluated_at"] = evaluated_at
             store.add_attention_eval(
                 {
-                    "id": f"{evaluated_at}:{item['object_id']}",
+                    "id": f"{item['object_id']}:{evaluated_at}:{item['score']}",
                     "evaluated_at": evaluated_at,
                     "scope": item["scope"],
                     "object_id": item["object_id"],
@@ -144,6 +155,7 @@ class AttentionEngine:
                     "missing_info": item["missing_info"],
                 }
             )
+            store.prune_attention_evals(item["object_id"], keep=EVAL_KEEP_PER_OBJECT)
         return {
             "evaluated_at": evaluated_at,
             "scope": scope,
@@ -174,6 +186,13 @@ class AttentionEngine:
         status = obj.get("status", "mentioned")
         confidence = float(obj.get("confidence", 1.0))
 
+        obj_type = obj.get("type", kind)
+        if obj_type in TYPE_IMPORTANCE:
+            factors["importance"] = TYPE_IMPORTANCE[obj_type]
+            reasons.append(
+                f"langfristig wichtig (Typ '{obj_type}', +{TYPE_IMPORTANCE[obj_type]})"
+            )
+
         if due:
             if due < today:
                 days = _days_overdue(due, today)
@@ -203,7 +222,7 @@ class AttentionEngine:
             ):
                 factors["due_7d"] = WEIGHTS["due_7d"]
                 reasons.append(f"fällig innerhalb 7 Tage (+{WEIGHTS['due_7d']})")
-        elif status in ("committed", "intent"):
+        elif status in ("committed", "intent") and obj_type == "commitment":
             missing.append("keine Frist hinterlegt")
 
         if status in WEIGHTS and status in ("committed", "intent", "mentioned"):
@@ -251,6 +270,13 @@ class AttentionEngine:
             reasons.append(f"seit {updated} nicht bearbeitet (+{WEIGHTS['stale']})")
             missing.append("lange nicht bearbeitet")
 
+        snooze_count = int((obj.get("meta") or {}).get("snooze_count", 0) or 0)
+        if snooze_count >= SNOOZE_REPEAT_MIN:
+            factors["snooze_repeat"] = SNOOZE_REPEAT_POINTS
+            reasons.append(
+                f"wiederholt verschoben ({snooze_count}x, +{SNOOZE_REPEAT_POINTS})"
+            )
+
         score = sum(factors.values())
         category = "observe"
         if (
@@ -275,7 +301,7 @@ class AttentionEngine:
         )
         return {
             "object_id": obj["id"],
-            "object_type": obj.get("type", kind),
+            "object_type": obj_type,
             "title": obj.get("title", ""),
             "scope": obj.get("scope", "private"),
             "status": status,

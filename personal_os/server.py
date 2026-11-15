@@ -326,7 +326,11 @@ def create_app(core: PersonalOS):
         if err:
             return err
         limit = request.query_params.get("limit")
-        result = core.attention_points(scope=scope, limit=int(limit) if limit else None)
+        try:
+            limit_val = int(limit) if limit else None
+        except ValueError:
+            return JSONResponse({"error": "limit muss eine Zahl sein"}, status_code=400)
+        result = core.attention_points(scope=scope, limit=limit_val)
         if subject(request) == "external":
             result["items"] = core.redact_for_external(result["items"])
         return JSONResponse(result)
