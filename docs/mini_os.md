@@ -443,3 +443,19 @@ nicht-mutierender Report via `pos status` → `file_permissions`
 (`personal_os/fileperms.py`, `tests/test_personal_os_fileperms.py`). Gate-Bericht mit
 Entscheidung **AKTIVIERUNGSBEREIT**: `docs/echtbetrieb_phase1.md`. PR #1 nicht gemergt,
 14-Tage-Messung nicht gestartet.
+
+---
+
+## CI-Nachweis Mini-OS (Basis 221a15a)
+
+Neuer Workflow `.github/workflows/personal-os.yml` (PR→main + push + dispatch, Python
+3.11/3.12: `pip install --no-deps -e .`, optionale Test-Deps, `pos --help`, volle
+unittest-Suite, pre-commit auf Mini-OS-Dateien; keine Secrets/Daten/Modell-Calls).
+Tatsächlicher Actions-Nachweis auf PR-Head `221a15a`: Run **43776178882**
+(event=pull_request, Draft-PR #1) und Run **43776173550** (push) beide **success**
+— 171/171 Tests OK auf 3.11+3.12, pre-commit clean, Paket installiert.
+Erstversuch auf 1c361c2 FEHLGESCHLAGEN (fehlende optionale Test-Deps) → in 221a15a
+behoben. Verbleibend: „Verify Action Pins“ fällt repo-weit wegen Upstream-Tag-Drift in
+nicht von PR #1 berührten Workflows fehl (personal-os.yml selbst OK). Bericht:
+`docs/ci_nachweis.md`. **Ergebnis: BESTANDEN.** PR #1 bleibt Draft; 14-Tage-Messung
+nicht gestartet.
